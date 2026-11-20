@@ -241,3 +241,20 @@ async function copyText(txt) {
   let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
   ta.remove(); toast(ok ? 'Kopiert' : 'Kopieren nicht möglich: bitte Code im Feld markieren und kopieren'); return ok;
 }
+
+/* ---------- Grosser Zurück-Knopf ganz unten (spiegelt den kleinen Knopf oben links) ---------- */
+function enableBottomBack() {
+  const app = $('#app');
+  const apply = () => {
+    if (app.querySelector('.backbig')) return;
+    const top = app.querySelector('.back'); if (!top) return;
+    const ex = app.querySelector('#back');
+    if (ex) { ex.classList.add('backbig'); ex.textContent = '‹ Zurück'; app.appendChild(ex); return; }
+    let b;
+    if (top.tagName === 'A') { b = document.createElement('a'); b.href = top.getAttribute('href'); b.className = 'btn backbig'; b.textContent = '‹ Zur Startseite'; }
+    else { b = document.createElement('button'); b.className = 'backbig'; b.textContent = '‹ Zurück'; b.onclick = () => top.click(); }
+    app.appendChild(b);
+  };
+  new MutationObserver(apply).observe(app, { childList: true });
+  apply();
+}

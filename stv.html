@@ -4,9 +4,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="StV-Einsätze"><meta name="theme-color" content="#0F6E56">
 <title>StV-Einsätze</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=3">
-<script src="qrlib.js?v=3"></script><script src="shared.js?v=3"></script>
-</head><body class="stv"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 3 · 20.11.2026</div>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=4">
+<script src="qrlib.js?v=4"></script><script src="shared.js?v=4"></script>
+</head><body class="stv"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 4 · 20.11.2026</div>
 <script>
 const KEY = 'stv_data_v1';
 let D = store(KEY, { profil: null, eintraege: [], verlauf: [] });
@@ -21,7 +21,7 @@ const eLine = e => `${esc(standortName(e.standortNr))} · ${esc(e.funktion)} · 
 /* ---------- Profil ---------- */
 function viewSetup() {
   const p = D.profil || {};
-  app.innerHTML = `
+  app.innerHTML = `${D.profil ? '<button class="back" id="b0">‹ Zurück</button>' : '<a class="back" href="index.html">‹ Startseite</a>'}
   <header class="top"><h1>${D.profil ? 'Profil ändern' : 'Willkommen'}</h1><span class="role">Stellvertretung</span></header>
   ${!standalone() ? `<div class="info"><b>Zuerst:</b> Füge diese Seite zum Home-Bildschirm hinzu (iPhone: Teilen-Symbol → «Zum Home-Bildschirm»; Android: Menü ⋮ → «Zum Startbildschirm hinzufügen») und öffne sie dann von dort. Nur so bleiben deine Einträge sicher gespeichert.</div>` : ''}
   <div class="card">
@@ -41,6 +41,7 @@ function viewSetup() {
     D.profil = { name, persNr: pnr }; persist(); viewHome();
   };
   if ($('#back')) $('#back').onclick = viewHome;
+  if ($('#b0')) $('#b0').onclick = viewHome;
 }
 
 /* ---------- Sammelblatt ---------- */
@@ -49,7 +50,7 @@ function viewHome() {
   sortE();
   const offen = D.eintraege.filter(e => e.status !== 'visiert').length;
   const std = D.eintraege.reduce((s, e) => s + hours(e.von, e.bis), 0);
-  app.innerHTML = `
+  app.innerHTML = `<a class="back" href="index.html">‹ Startseite</a>
   <header class="top"><div><h1>Mein Sammelblatt</h1><div class="sub">${esc(D.profil.name)} · ${esc(D.profil.persNr)}</div></div><span class="role">Stellvertretung</span></header>
   <div class="card">
     ${D.eintraege.length ? `<div class="list">${D.eintraege.map(e => `
@@ -88,7 +89,7 @@ function viewHome() {
 function viewForm(id) {
   const old = id ? D.eintraege.find(e => e.code === id) : null;
   const e = old || { datum: todayISO(), standortNr: (D.eintraege[D.eintraege.length - 1] || {}).standortNr || CONFIG.standorte[0].nr, funktion: '', von: null, bis: null, mittag: null };
-  app.innerHTML = `
+  app.innerHTML = `<button class="back" id="b0">‹ Zurück</button>
   <header class="top"><h1>${old ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}</h1><span class="role">Stellvertretung</span></header>
   <div class="card">
     <label class="l">Datum</label><input type="date" id="dat" value="${e.datum}" max="${todayISO()}">
@@ -103,7 +104,7 @@ function viewForm(id) {
   </div>`;
   const pick = (box) => $$('.chip', box).forEach(c => c.onclick = () => { $$('.chip', box).forEach(x => x.classList.remove('on')); c.classList.add('on'); });
   pick($('#fun')); pick($('#mit'));
-  $('#back').onclick = () => old ? viewEntry(old.code) : viewHome();
+  $('#back').onclick = $('#b0').onclick = () => old ? viewEntry(old.code) : viewHome();
   $('#ok').onclick = () => {
     const err = m => $('#err').textContent = m;
     const datum = $('#dat').value, fun = $('#fun .on'), mit = $('#mit .on'), vs = $('#von').value, bs = $('#bis').value;
@@ -128,7 +129,7 @@ function viewForm(id) {
 function viewEntry(id) {
   const e = D.eintraege.find(x => x.code === id); if (!e) return viewHome();
   const vis = e.status === 'visiert';
-  app.innerHTML = `
+  app.innerHTML = `<button class="back" id="b0">‹ Zurück</button>
   <header class="top"><h1>${vis ? 'Einsatz' : 'Visum holen'}</h1><span class="role">Stellvertretung</span></header>
   <div class="card">
     <div class="kv"><div>Datum</div><div>${fmtDate(e.datum)}</div><div>Standort</div><div>${esc(standortName(e.standortNr))}</div>
@@ -145,7 +146,7 @@ function viewEntry(id) {
     <button id="tq">Quittung eintippen</button>
     <div class="btnrow"><button id="ed">Bearbeiten</button><button class="danger" id="del">Löschen</button></div>`}
   <button id="back">Zum Sammelblatt</button>`;
-  $('#back').onclick = viewHome;
+  $('#back').onclick = $('#b0').onclick = viewHome;
   if (vis) return;
   $('#sq').onclick = scanQuittung;
   $('#cc').onclick = () => copyText(group4(e.code));
@@ -207,4 +208,5 @@ function abrechnung() {
 }
 
 viewHome();
+enableBottomBack();
 </script></body></html>

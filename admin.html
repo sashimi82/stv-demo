@@ -2,9 +2,9 @@
 <html lang="de-CH"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StV-Prüfung · Administration</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=3">
-<script src="qrlib.js?v=3"></script><script src="shared.js?v=3"></script>
-</head><body class="adm"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 3 · 20.11.2026</div>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=4">
+<script src="qrlib.js?v=4"></script><script src="shared.js?v=4"></script>
+</head><body class="adm"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 4 · 20.11.2026</div>
 <script>
 const KEY = 'adm_data_v1';
 let D = store(KEY, { keys: {}, visa: {}, abgerechnet: {}, dateien: [] });
@@ -17,7 +17,7 @@ const findKey = (nr, id) => (D.keys[nr] || []).find(k => k.keyId === id);
 const STAT = { ok: ['b-ok', '✓ stimmt'], diff: ['b-warn', '⚠ Abweichung'], none: ['b-err', '✗ kein Visum'], storno: ['b-err', '✗ Visum storniert'], manip: ['b-err', '✗ Visum ungültig'], dup: ['b-gray', '⧉ schon abgerechnet'], manuell: ['b-acc', '✓ manuell anerkannt'] };
 
 function render() {
-  app.innerHTML = `<header class="top"><div><h1>Prüfung Stellvertretung</h1><div class="sub">Administration · alle Daten bleiben in diesem Browser</div></div><span class="role">Administration</span></header>
+  app.innerHTML = `<a class="back" href="index.html">‹ Startseite</a><header class="top"><div><h1>Prüfung Stellvertretung</h1><div class="sub">Administration · alle Daten bleiben in diesem Browser</div></div><span class="role">Administration</span></header>
   <div class="tabs">${[['pruefung', 'Prüfung'], ['archiv', 'Visa-Archiv'], ['standorte', 'Standorte und Schlüssel'], ['sicherung', 'Sicherung']].map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-t="${k}">${t}</button>`).join('')}</div>
   <div id="tab"></div>`;
   $$('.tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.t; render(); });
@@ -239,4 +239,5 @@ function tabSicherung(el) {
 }
 
 render();
+enableBottomBack();
 </script></body></html>

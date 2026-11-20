@@ -4,9 +4,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="StV-Visum"><meta name="theme-color" content="#534AB7">
 <title>StV-Visum · Leitung</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=3">
-<script src="qrlib.js?v=3"></script><script src="shared.js?v=3"></script>
-</head><body class="lei"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 3 · 20.11.2026</div>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=4">
+<script src="qrlib.js?v=4"></script><script src="shared.js?v=4"></script>
+</head><body class="lei"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 4 · 20.11.2026</div>
 <script>
 const KEY = 'lei_data_v1';
 let D = store(KEY, { setup: null, salt: null, stammHash: null, ferien: null, visa: [], letzterExport: null, versuche: { n: 0, sperreBis: 0 } });
@@ -18,7 +18,7 @@ let pendingSetup = null; // Demo: Einrichtung über Link leitung.html#setup=…
 if (location.hash.startsWith('#setup=')) { pendingSetup = decodeURIComponent(location.hash.slice(7)); history.replaceState(null, '', location.pathname); }
 const isStamm = () => ROLE === 'stamm';
 const sName = () => standortName(D.setup.standortNr);
-const head = (t) => `<header class="top"><div><h1>${t}</h1><div class="sub">${esc(sName())}</div></div><span class="role">${ROLE === 'ferien' ? 'Ferien-PIN' : 'Leitungsmodus'}</span></header>`;
+const head = (t, back) => `${back ? '<button class="back" id="b0">‹ Zurück</button>' : '<a class="back" href="index.html">‹ Startseite</a>'}<header class="top"><div><h1>${t}</h1><div class="sub">${esc(sName())}</div></div><span class="role">${ROLE === 'ferien' ? 'Ferien-PIN' : 'Leitungsmodus'}</span></header>`;
 const pinHash = pin => sha256Hex(D.salt + '|' + pin);
 function bumpIdle() { clearTimeout(idleT); if (ROLE) idleT = setTimeout(() => { ROLE = null; toast('Automatisch gesperrt'); viewLock(); }, 5 * 60 * 1000); }
 ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, bumpIdle, { passive: true }));
@@ -37,7 +37,7 @@ function pinPad(el, len, onDone) {
 
 /* ---------- Einrichtung ---------- */
 function viewSetup(neu) {
-  app.innerHTML = `<header class="top"><h1>Betreuungshandy einrichten</h1><span class="role">Leitungsmodus</span></header>
+  app.innerHTML = `${neu ? '<button class="back" id="b0">‹ Zurück</button>' : '<a class="back" href="index.html">‹ Startseite</a>'}<header class="top"><h1>Betreuungshandy einrichten</h1><span class="role">Leitungsmodus</span></header>
   ${!window.navigator.standalone && !matchMedia('(display-mode: standalone)').matches ? '<div class="info"><b>Zuerst:</b> Diese Seite zum Home-Bildschirm hinzufügen und von dort öffnen. Erst dann einrichten: Nur so bleiben die Visa sicher gespeichert.</div>' : ''}
   <div class="card"><p>Die Administration gibt für jede Betreuung einen <b>Einrichtungs-QR-Code</b> mit dem Standort-Schlüssel ab.</p>
     <button class="pri" id="sc">Einrichtungs-QR-Code scannen</button>
@@ -56,10 +56,11 @@ function viewSetup(neu) {
   $('#sc').onclick = async () => { const t = await scanQR('Einrichtungs-QR-Code scannen'); if (t) use(t); };
   $('#ok').onclick = () => use($('#tx').value);
   if ($('#back')) $('#back').onclick = viewHome;
+  if ($('#b0')) $('#b0').onclick = viewHome;
   if (pendingSetup) { $('#tx').value = pendingSetup; pendingSetup = null; use($('#tx').value); }
 }
 function viewNewPin(change) {
-  app.innerHTML = `<header class="top"><h1>${change ? 'Stamm-PIN ändern' : 'Stamm-PIN festlegen'}</h1><span class="role">Leitungsmodus</span></header>
+  app.innerHTML = `${change ? '<button class="back" id="b0">‹ Zurück</button>' : ''}<header class="top"><h1>${change ? 'Stamm-PIN ändern' : 'Stamm-PIN festlegen'}</h1><span class="role">Leitungsmodus</span></header>
   <div class="card center"><p id="t">Wähle eine 4-stellige PIN für das Leitungsteam von <b>${esc(sName())}</b>.</p><div id="pp"></div><div class="err" id="err"></div></div>
   ${change ? '<button id="back">Abbrechen</button>' : ''}`;
   let first = null;
@@ -72,12 +73,13 @@ function viewNewPin(change) {
     persist(); ROLE = 'stamm'; bumpIdle(); toast(change ? 'Stamm-PIN geändert' : 'Betreuungshandy ist eingerichtet'); viewHome();
   });
   if ($('#back')) $('#back').onclick = viewHome;
+  if ($('#b0')) $('#b0').onclick = viewHome;
 }
 
 /* ---------- Sperrbildschirm ---------- */
 function viewLock() {
   ROLE = null;
-  app.innerHTML = `<header class="top"><div><h1>Leitungsmodus</h1><div class="sub">${esc(sName())}</div></div><span class="role">gesperrt</span></header>
+  app.innerHTML = `<a class="back" href="index.html">‹ Startseite</a><header class="top"><div><h1>Leitungsmodus</h1><div class="sub">${esc(sName())}</div></div><span class="role">gesperrt</span></header>
   <div class="card center"><p>PIN eingeben</p><div id="pp"></div><div class="err" id="err"></div></div>
   <p class="note center">Stamm-PIN für das Leitungsteam oder Ferien-PIN während der Ferienbetreuung.</p>`;
   pinPad($('#pp'), 4, async pin => {
@@ -140,13 +142,14 @@ function checkCode(code) {
   else if (e.datum > t) stop = 'Einsätze in der Zukunft können nicht visiert werden.';
   else if (spaet > CONFIG.maxNachtraeglichTage) stop = 'Der Einsatz liegt mehr als ' + CONFIG.maxNachtraeglichTage + ' Tage zurück. Bitte mit der Administration klären.';
   else if (ROLE === 'ferien' && (e.datum < D.ferien.von || e.datum > D.ferien.bis)) stop = 'Mit der Ferien-PIN können nur Einsätze während der Ferienbetreuung (' + fmtDateShort(D.ferien.von) + '–' + fmtDate(D.ferien.bis) + ') visiert werden.';
-  app.innerHTML = `${head('Einsatz prüfen')}
+  app.innerHTML = `${head('Einsatz prüfen', 1)}
   <div class="card"><div style="margin-bottom:10px"><span class="bd b-ok">Code gültig</span> ${spaet >= CONFIG.nachtraeglichAbTagen ? '<span class="bd b-warn">nachträglich: ' + spaet + ' Tage später</span>' : ''}</div>
   <div class="kv"><div>Personalnummer</div><div><b>${e.persNr}</b></div><div>Datum</div><div>${fmtDate(e.datum)}</div><div>Zeit</div><div>${minToHHMM(e.von)}–${minToHHMM(e.bis)} (${hours(e.von, e.bis)} Std.)</div>
   <div>Funktion</div><div>${esc(e.funktion)}</div><div>Mittagessen</div><div>${e.mittag ? 'ja' : 'nein'}</div><div>Standort</div><div>${esc(standortName(e.standortNr))}</div></div></div>
   ${stop ? `<div class="info">${stop}</div><button id="back">Zurück</button>` : `
   <div class="card"><label class="l" style="margin-top:0">Visiert von (dein Name)</label><input id="vn" value="${esc(lastName)}" autocomplete="name"><div class="err" id="err"></div></div>
   <div class="btnrow"><button id="no">Stimmt nicht</button><button class="pri" id="ok">Visieren</button></div>`}`;
+  $('#b0').onclick = viewHome;
   if (stop) return $('#back').onclick = viewHome;
   $('#no').onclick = () => { alert('Die Stellvertretung soll den Einsatz auf ihrem Handy korrigieren («Bearbeiten») und danach den neuen QR-Code zeigen.'); viewHome(); };
   $('#ok').onclick = async () => {
@@ -160,7 +163,7 @@ function checkCode(code) {
 }
 function viewQuitt(v) {
   const stamp = v.visiertAm.replace(/[-T:]/g, '');
-  app.innerHTML = `${head('Quittung')}
+  app.innerHTML = `${head('Quittung', 1)}
   <div class="card center"><div style="font-size:44px;color:#3B6D11;line-height:1">✓</div><div style="font-size:20px;font-weight:650;margin:4px 0 10px">Visum gespeichert</div>
   <div class="sub">Die Stellvertretung scannt jetzt diesen QR-Code</div>
   <div class="qrbox">${qrSVG(QR_QUITT + v.code + ':' + v.tag + ':' + stamp + ':' + encodeURIComponent(v.visiertVon))}</div>
@@ -168,19 +171,19 @@ function viewQuitt(v) {
   <button class="small" id="cq" style="margin-top:6px">Quittung kopieren</button>
   <p class="note">${v.persNr} · ${fmtDateShort(v.datum)} · ${minToHHMM(v.von)}–${minToHHMM(v.bis)} · ${esc(v.funktion)} · ${esc(v.visiertVon)}</p></div>
   <button class="pri" id="ok">Fertig</button>`;
-  $('#ok').onclick = viewHome;
+  $('#ok').onclick = $('#b0').onclick = viewHome;
   $('#cq').onclick = () => copyText(v.tag);
 }
 function viewVisum(code) {
   const v = D.visa.filter(x => x.code === code).sort((a, b) => a.storniert - b.storniert)[0]; if (!v) return viewHome();
-  app.innerHTML = `${head('Visum')}
+  app.innerHTML = `${head('Visum', 1)}
   <div class="card"><div class="kv"><div>Personalnummer</div><div>${v.persNr}</div><div>Datum</div><div>${fmtDate(v.datum)}</div><div>Zeit</div><div>${minToHHMM(v.von)}–${minToHHMM(v.bis)}</div>
   <div>Funktion</div><div>${esc(v.funktion)}</div><div>Mittagessen</div><div>${v.mittag ? 'ja' : 'nein'}</div><div>Visiert von</div><div>${esc(v.visiertVon)} · ${fmtStamp(v.visiertAm)}${v.pinTyp === 'ferien' ? ' (Ferien-PIN)' : ''}</div>
   <div>Quittung</div><div class="mono">${v.tag}</div>${v.storniert ? `<div>Storniert</div><div>${fmtStamp(v.stornoAm)}</div>` : ''}</div></div>
   ${v.storniert ? '' : '<button id="q">Quittung nochmals zeigen</button>'}
   ${isStamm() && !v.storniert ? '<button class="danger" id="st">Visum stornieren</button>' : ''}
   <button id="back">Zurück</button>`;
-  $('#back').onclick = viewHome;
+  $('#back').onclick = $('#b0').onclick = viewHome;
   if ($('#q')) $('#q').onclick = () => viewQuitt(v);
   if ($('#st')) $('#st').onclick = async () => {
     if (!confirm('Visum wirklich stornieren? Die Administration sieht den Einsatz dann als «Visum storniert».')) return;
@@ -191,7 +194,7 @@ function viewVisum(code) {
 /* ---------- Ferien-PIN (nur Stamm) ---------- */
 function viewFerien() {
   const f = D.ferien;
-  app.innerHTML = `${head('Ferien-PIN')}
+  app.innerHTML = `${head('Ferien-PIN', 1)}
   <div class="card"><p>Für die Ferienbetreuung, wenn niemand aus dem Leitungsteam vor Ort ist. Die Ferien-PIN</p>
   <ul style="margin:8px 0 0 20px;font-size:15px;color:var(--tx2)"><li>gilt nur im gewählten Zeitraum und läuft dann automatisch ab,</li><li>kann nur Einsätze aus diesem Zeitraum visieren und Visa exportieren,</li><li>kann keine Visa stornieren und keine PINs oder Schlüssel ändern.</li></ul>
   ${f ? `<div class="ok-box" style="margin-top:14px">Aktuelle Ferien-PIN gültig vom <b>${fmtDate(f.von)}</b> bis <b>${fmtDate(f.bis)}</b>${todayISO() > f.bis ? ' (abgelaufen)' : ''}.</div><button class="danger" id="del">Ferien-PIN löschen</button>` : ''}
@@ -202,7 +205,7 @@ function viewFerien() {
   <button class="small" id="gen" style="margin-top:8px">Zufällige PIN vorschlagen</button>
   <div class="err" id="err"></div><button class="pri" id="ok">Ferien-PIN speichern</button></div>
   <button id="back">Zurück</button>`;
-  $('#back').onclick = viewHome;
+  $('#back').onclick = $('#b0').onclick = viewHome;
   $('#gen').onclick = () => { let p; do { p = String(crypto.getRandomValues(new Uint32Array(1))[0] % 10000).padStart(4, '0'); } while (/^(\d)\1{3}$/.test(p)); $('#fpin').value = p; };
   if ($('#del')) $('#del').onclick = () => { if (confirm('Ferien-PIN löschen? Sie funktioniert dann sofort nicht mehr.')) { D.ferien = null; persist(); toast('Ferien-PIN gelöscht'); viewFerien(); } };
   $('#ok').onclick = async () => {
@@ -233,4 +236,5 @@ async function exportVisa() {
 }
 
 if (pendingSetup) viewSetup(!!(D.setup && D.stammHash)); else viewHome();
+enableBottomBack();
 </script></body></html>
