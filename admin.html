@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="de-CH"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StV-Prüfung · Administration</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css">
+<script src="qrlib.js"></script><script src="shared.js"></script>
+</head><body class="adm"><div class="wrap" id="app"></div>
+<script>
+const KEY = 'adm_data_v1';
+let D = store(KEY, { keys: {}, visa: {}, abgerechnet: {}, dateien: [] });
+const persist = () => save(KEY, D);
+askPersist();
+const app = $('#app');
+let TAB = 'pruefung', ROWS = [], LOADMSG = [];
+const curKey = nr => { const k = (D.keys[nr] || []); return k[k.length - 1]; };
+const findKey = (nr, id) => (D.keys[nr] || []).find(k => k.keyId === id);
+const STAT = { ok: ['b-ok', '✓ stimmt'], diff: ['b-warn', '⚠ Abweichung'], none: ['b-err', '✗ kein Visum'], storno: ['b-err', '✗ Visum storniert'], manip: ['b-err', '✗ Visum ungültig'], dup: ['b-gray', '⧉ schon abgerechnet'], manuell: ['b-acc', '✓ manuell anerkannt'] };
+
+function render() {
+  app.innerHTML = `<header class="top"><div><h1>Prüfung Stellvertretung</h1><div class="sub">Administration · alle Daten bleiben in diesem Browser</div></div><span class="role">Administration</span></header>
+  <div class="tabs">${[['pruefung', 'Prüfung'], ['archiv', 'Visa-Archiv'], ['standorte', 'Standorte und Schlüssel'], ['sicherung', 'Sicherung']].map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-t="${k}">${t}</button>`).join('')}</div>
+  <div id="tab"></div>`;
+  $$('.tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.t; render(); });
+  ({ pruefung: tabPruefung, archiv: tabArchiv, standorte: tabStandorte, sicherung: tabSicherung })[TAB]($('#tab'));
+}
+
+/* ---------- Standorte und Schlüssel ---------- */
+function tabStandorte(el) {
+  el.innerHTML = `<div class="card"><h2>Standorte und Schlüssel</h2>
+  <p class="sub" style="margin-bottom:12px">Pro Betreuung einen Schlüssel erzeugen und den Einrichtungs-QR-Code mit dem Betreuungshandy scannen. Ein neuer Schlüssel sperrt den alten (z. B. wenn ein Handy verloren ging).</p>
+  <table><tr><th>Standort</th><th>Schlüssel</th><th>Erstellt</th><th></th></tr>
+  ${CONFIG.standorte.map(s => { const k = curKey(s.nr); return `<tr><td>${esc(s.name)}</td><td>${k ? 'Nr. ' + k.keyId : '<span class="sub">noch keiner</span>'}</td><td>${k ? fmtStamp(k.erstellt) : ''}</td>
+    <td style="text-align:right">${k ? `<button class="small" data-qr="${s.nr}">Einrichtungs-QR zeigen</button> ` : ''}<button class="small" data-new="${s.nr}">${k ? 'Neuer Schlüssel' : 'Schlüssel erzeugen'}</button></td></tr>`; }).join('')}
+  </table></div>`;
+  $$('[data-new]', el).forEach(b => b.onclick = () => {
+    const nr = +b.dataset.new, list = D.keys[nr] = D.keys[nr] || [];
+    if (list.length && !confirm('Neuen Schlüssel für ' + standortName(nr) + ' erzeugen? Der bisherige wird gesperrt: Visa, die danach noch damit erteilt werden, sind markiert. Das Betreuungshandy muss neu eingerichtet werden.')) return;
+    const now = nowLocalISO(); if (list.length) list[list.length - 1].gesperrtAb = now;
+    list.push({ keyId: list.length + 1, secret: randomB32(26), erstellt: now, gesperrtAb: null }); persist(); render(); showSetup(nr);
+  });
+  $$('[data-qr]', el).forEach(b => b.onclick = () => showSetup(+b.dataset.qr));
+}
+function showSetup(nr) {
+  const k = curKey(nr), txt = `${QR_SETUP}${nr}:${k.keyId}:${k.secret}`;
+  sheet(`<h2>Einrichtung ${esc(standortName(nr))}</h2>
+    <div class="info">Nur dem Leitungsteam zeigen. Wer diesen Code hat, kann für diesen Standort visieren.</div>
+    <div class="card center"><div class="sub">Im Leitungsmodus «Einrichtungs-QR-Code scannen» wählen</div><div class="qrbox">${qrSVG(txt)}</div>
+    <div class="sub">oder Code einfügen:</div><div class="mono" style="word-break:break-all;font-size:15px;margin-top:4px">${txt}</div>
+    <button class="small" id="cp" style="margin-top:10px">Code kopieren</button></div><button class="cl">Schliessen</button>`,
+    (el, close) => { $('.cl', el).onclick = close; $('#cp', el).onclick = () => navigator.clipboard.writeText(txt).then(() => toast('Kopiert')); });
+}
+
+/* ---------- Dateien laden ---------- */
+async function loadFiles(files) {
+  LOADMSG = []; let stv = 0, vis = 0, neu = 0, bad = 0;
+  for (const f of files) {
+    let d; try { d = await readJSONFile(f); } catch (e) { LOADMSG.push(['b-err', e.message]); continue; }
+    if (d.typ === 'leitung') {
+      vis++;
+      for (const v of d.visa || []) {
+        const k = findKey(v.standortNr, v.keyId), id = v.code + '|' + v.visiertAm;
+        let gueltig = false, grund = '';
+        if (!k) grund = 'Unbekannter Schlüssel';
+        else {
+          const sig = await visumSig(k.secret, v), tag = await quittTag(k.secret, v.code);
+          gueltig = sig === v.sig && tag === v.tag && v.standortNr === d.standortNr;
+          if (!gueltig) grund = 'Signatur stimmt nicht: Datei wurde verändert';
+          const chk = unpackEntry(v.code);
+          if (gueltig && (chk.err || chk.persNr !== v.persNr || chk.datum !== v.datum || chk.von !== v.von || chk.bis !== v.bis || chk.funktion !== v.funktion || chk.mittag !== v.mittag)) { gueltig = false; grund = 'Angaben passen nicht zum Code'; }
+        }
+        const alt = D.visa[id];
+        if (!alt) neu++;
+        if (!alt || (v.stornoAm || '') > (alt.stornoAm || '') || (!alt.gueltig && gueltig)) D.visa[id] = { ...v, gueltig, grund, quelle: f.name, importiertAm: nowLocalISO(), gesperrt: !!(k && k.gesperrtAb && v.visiertAm > k.gesperrtAb) };
+        if (!gueltig) bad++;
+      }
+      D.dateien.push({ name: f.name, typ: 'leitung', am: nowLocalISO(), n: (d.visa || []).length });
+    } else if (d.typ === 'stv') {
+      stv++;
+      for (const e of d.eintraege || []) if (!ROWS.some(x => x.e.code === e.code)) ROWS.push(makeRow(d, e, f.name));
+      D.dateien.push({ name: f.name, typ: 'stv', am: nowLocalISO(), n: (d.eintraege || []).length });
+    } else LOADMSG.push(['b-err', f.name + ': unbekannter Dateityp']);
+  }
+  ROWS.forEach(evaluate);
+  persist();
+  LOADMSG.unshift(['b-ok', `${stv} StV-Datei(en) und ${vis} Leitungs-Datei(en) geladen · ${neu} neue Visa im Archiv`]);
+  if (bad) LOADMSG.push(['b-err', bad + ' Visa mit ungültiger Signatur: diese Visa werden nicht anerkannt (siehe Visa-Archiv).']);
+  render();
+}
+function makeRow(d, e, quelle) {
+  return { persNr: d.persNr, name: d.name, quelle, e: { ...e, vonM: hhmmToMin(e.von), bisM: hhmmToMin(e.bis) }, sel: false, status: '', v: null, hinweise: [], manuell: null };
+}
+function evaluate(r) {
+  const e = r.e; r.hinweise = []; r.v = null; r.diffs = [];
+  if (r.manuell) { r.status = 'manuell'; r.v = r.manuell.v || null; r.sel = true; return; }
+  if (D.abgerechnet[e.code]) { r.status = 'dup'; r.hinweise.push('abgerechnet am ' + fmtStamp(D.abgerechnet[e.code].am)); r.sel = false; return; }
+  const all = Object.values(D.visa);
+  const same = all.filter(v => v.code === e.code);
+  const ok = same.find(v => v.gueltig && !v.storniert);
+  if (ok) {
+    r.status = 'ok'; r.v = ok; r.sel = true;
+    if (ok.pinTyp === 'ferien') r.hinweise.push('Ferien-PIN');
+    if (ok.pinTyp === 'ferien' && (ok.visiertAm.slice(0, 10) < ok.ferienVon || ok.visiertAm.slice(0, 10) > ok.ferienBis)) { r.hinweise.push('Visum ausserhalb der Ferien-PIN-Gültigkeit'); r.sel = false; }
+    if (ok.nachtraeglichTage >= CONFIG.nachtraeglichAbTagen) r.hinweise.push(ok.nachtraeglichTage + ' Tage nachträglich visiert');
+    if (ok.gesperrt) { r.hinweise.push('mit gesperrtem Schlüssel visiert'); r.sel = false; }
+    if (e.quittung && e.quittung.tag && e.quittung.tag !== ok.tag) { r.hinweise.push('Quittung auf dem Handy passt nicht'); r.sel = false; }
+    if (!e.quittung) r.hinweise.push('ohne Quittung eingereicht');
+    const c = unpackEntry(e.code);
+    if (c.err || c.persNr !== r.persNr) { r.hinweise.push('Personalnummer passt nicht zur Datei'); r.sel = false; }
+    else if (c.von !== e.vonM || c.bis !== e.bisM || c.funktion !== e.funktion || c.mittag !== e.mittag || c.datum !== e.datum) { r.hinweise.push('StV-Datei wurde nachträglich verändert, es gelten die Werte des Visums'); r.sel = false; }
+    return;
+  }
+  if (same.some(v => !v.gueltig)) { r.status = 'manip'; r.hinweise.push(same.find(v => !v.gueltig).grund); r.sel = false; return; }
+  if (same.some(v => v.storniert)) { r.status = 'storno'; r.sel = false; return; }
+  const cand = all.find(v => v.gueltig && !v.storniert && v.persNr === r.persNr && v.datum === e.datum && v.standortNr === e.standortNr);
+  if (cand) {
+    r.status = 'diff'; r.v = cand; r.sel = false;
+    if (cand.von !== e.vonM || cand.bis !== e.bisM) r.diffs.push(['Zeit', e.von + '–' + e.bis, minToHHMM(cand.von) + '–' + minToHHMM(cand.bis)]);
+    if (cand.funktion !== e.funktion) r.diffs.push(['Funktion', e.funktion, cand.funktion]);
+    if (cand.mittag !== e.mittag) r.diffs.push(['Mittagessen', e.mittag ? 'ja' : 'nein', cand.mittag ? 'ja' : 'nein']);
+    r.hinweise.push(r.diffs.map(d => d[0]).join(', ') + ' unterschiedlich');
+    return;
+  }
+  r.status = 'none'; r.sel = false; r.hinweise.push('Leitungs-Datei von ' + standortName(e.standortNr) + ' fehlt oder Einsatz nicht visiert');
+}
+const final = r => { // Werte, die abgerechnet werden
+  const fromV = v => ({ von: minToHHMM(v.von), bis: minToHHMM(v.bis), funktion: v.funktion, mittag: v.mittag, v });
+  if (r.status === 'manuell' && r.manuell.v) return fromV(r.manuell.v);
+  if (r.status === 'ok') return fromV(r.v);
+  return { von: r.e.von, bis: r.e.bis, funktion: r.e.funktion, mittag: r.e.mittag, v: r.v };
+};
+
+/* ---------- Prüfung ---------- */
+function tabPruefung(el) {
+  const order = { diff: 0, none: 1, manip: 2, storno: 3, ok: 4, manuell: 5, dup: 6 };
+  ROWS.sort((a, b) => order[a.status] - order[b.status] || a.persNr.localeCompare(b.persNr) || a.e.datum.localeCompare(b.e.datum));
+  const sel = ROWS.filter(r => r.sel), selStd = sel.reduce((s, r) => s + hours(hhmmToMin(final(r).von), hhmmToMin(final(r).bis)), 0);
+  const cnt = s => ROWS.filter(r => r.status === s).length;
+  el.innerHTML = `
+  <label class="drop" id="drop">Dateien hierher ziehen oder <u>auswählen</u><br><span style="font-size:14px">StV-Dateien (stv_…json) und Leitungs-Dateien (visa_…json), beliebig gemischt</span><input type="file" id="fi" multiple accept=".json,application/json" hidden></label>
+  ${LOADMSG.map(([c, m]) => `<div style="margin-top:10px"><span class="bd ${c}">${esc(m)}</span></div>`).join('')}
+  ${ROWS.length ? `<div class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><h2>Ergebnis</h2>
+    <div class="sub">${cnt('ok') + cnt('manuell')} in Ordnung · ${cnt('diff')} Abweichungen · ${cnt('none') + cnt('manip') + cnt('storno')} ohne gültiges Visum · ${cnt('dup')} schon abgerechnet</div></div>
+    <div style="overflow-x:auto"><table><tr><th></th><th>Person</th><th>Datum</th><th>Standort</th><th>Funktion</th><th>Zeit</th><th>Std.</th><th>Mittag</th><th>Status</th><th>Hinweise</th><th></th></tr>
+    ${ROWS.map((r, i) => { const f = final(r); return `<tr class="${r.sel ? '' : ''}"><td><input type="checkbox" data-s="${i}" ${r.sel ? 'checked' : ''} ${['ok', 'manuell'].includes(r.status) ? '' : 'disabled'} style="width:auto"></td>
+      <td>${esc(r.name)}<div class="sub">${esc(r.persNr)}</div></td><td>${fmtDateShort(r.e.datum)}${r.e.datum.slice(0, 4)}</td><td>${esc(standortName(r.e.standortNr))}</td><td>${esc(f.funktion)}</td>
+      <td style="white-space:nowrap">${f.von}–${f.bis}</td><td>${hours(hhmmToMin(f.von), hhmmToMin(f.bis))}</td><td>${f.mittag ? 'ja' : 'nein'}</td>
+      <td><span class="bd ${STAT[r.status][0]}">${STAT[r.status][1]}</span></td><td class="sub">${esc(r.hinweise.join(' · '))}</td>
+      <td><button class="small" data-d="${i}">Details</button></td></tr>`; }).join('')}
+    </table></div>
+    <div class="btnrow" style="margin-top:6px;flex-wrap:wrap">
+      <button class="pri" id="abr" ${sel.length ? '' : 'disabled'}>${sel.length} ausgewählte abrechnen (${Math.round(selStd * 100) / 100} Std.) → Excel</button>
+      <button id="erg">Prüfergebnis als Excel</button><button id="clr">Liste leeren</button></div>
+    <p class="note">«Abrechnen» erstellt eine Excel-Datei (CSV) und merkt sich die Einsätze als abgerechnet. Werden sie nochmals eingereicht, erscheinen sie als «schon abgerechnet».</p>
+  </div>` : '<p class="note" style="margin-top:14px">Tipp: Zuerst die Leitungs-Dateien laden, dann die StV-Dateien, oder alle zusammen. Visa werden im Archiv aufbewahrt, auch für spätere Monate.</p>'}`;
+  const fi = $('#fi', el), drop = $('#drop', el);
+  fi.onchange = () => loadFiles([...fi.files]);
+  drop.ondragover = e => { e.preventDefault(); drop.style.opacity = .7; };
+  drop.ondragleave = () => drop.style.opacity = 1;
+  drop.ondrop = e => { e.preventDefault(); drop.style.opacity = 1; loadFiles([...e.dataTransfer.files]); };
+  if (!ROWS.length) return;
+  $$('[data-s]', el).forEach(c => c.onchange = () => { ROWS[+c.dataset.s].sel = c.checked; render(); });
+  $$('[data-d]', el).forEach(b => b.onclick = () => details(ROWS[+b.dataset.d]));
+  $('#clr', el).onclick = () => { if (confirm('Prüfliste leeren? (Visa-Archiv und Abrechnungen bleiben erhalten.)')) { ROWS = []; LOADMSG = []; render(); } };
+  $('#erg', el).onclick = () => csv('pruefergebnis_' + todayISO() + '.csv', ROWS, true);
+  $('#abr', el).onclick = () => {
+    const s = ROWS.filter(r => r.sel); if (!s.length) return;
+    if (!confirm(s.length + ' Einsätze abrechnen und als Excel-Datei speichern?')) return;
+    csv('abrechnung_stv_' + todayISO() + '.csv', s, false);
+    const am = nowLocalISO(); s.forEach(r => { const f = final(r); D.abgerechnet[r.e.code] = { am, persNr: r.persNr, datum: r.e.datum, stunden: hours(hhmmToMin(f.von), hhmmToMin(f.bis)) }; r.manuell = null; });
+    persist(); ROWS.forEach(evaluate); toast(s.length + ' Einsätze abgerechnet'); render();
+  };
+}
+function details(r) {
+  const e = r.e, v = r.v;
+  const line = (k, a, b) => `<tr><td class="sub">${k}</td><td ${b !== undefined && a !== b ? 'style="color:var(--err);font-weight:650"' : ''}>${esc(a)}</td><td style="font-weight:600">${b === undefined ? '' : esc(b)}</td></tr>`;
+  const vz = v ? { zeit: minToHHMM(v.von) + '–' + minToHHMM(v.bis), funktion: v.funktion, mittag: v.mittag ? 'ja' : 'nein' } : {};
+  sheet(`<h2>${esc(r.name)} · ${esc(r.persNr)} · ${fmtDate(e.datum)}</h2><div class="sub" style="margin-bottom:10px">${esc(standortName(e.standortNr))} · <span class="bd ${STAT[r.status][0]}">${STAT[r.status][1]}</span></div>
+  <div class="card"><table><tr><th></th><th>Stellvertretung</th><th>${v ? 'Visum Leitung' : ''}</th></tr>
+  ${line('Zeit', e.von + '–' + e.bis, v ? vz.zeit : undefined)}${line('Funktion', e.funktion, v ? vz.funktion : undefined)}${line('Mittagessen', e.mittag ? 'ja' : 'nein', v ? vz.mittag : undefined)}
+  ${line('Quittung', e.quittung ? e.quittung.tag + ' (' + (e.quittung.name || '') + ')' : '–', v ? v.tag : undefined)}
+  ${v ? line('Visiert von', '', v.visiertVon + ' · ' + fmtStamp(v.visiertAm) + (v.pinTyp === 'ferien' ? ' · Ferien-PIN' : '')) : ''}
+  </table><p class="note">Quelle: ${esc(r.quelle)}${v ? ' · Visum aus ' + esc(v.quelle) : ''}</p></div>
+  ${r.hinweise.length ? `<div class="info">${esc(r.hinweise.join(' · '))}</div>` : ''}
+  ${r.status === 'diff' ? '<button class="pri" id="uv">Werte aus dem Visum übernehmen</button>' : ''}
+  ${['none', 'diff', 'storno'].includes(r.status) ? '<button id="ma">Trotzdem anerkennen (Angaben der Stellvertretung)</button>' : ''}
+  ${r.status === 'manuell' ? '<button id="rv">Anerkennung zurücknehmen</button>' : ''}
+  <a class="btn" href="mailto:?subject=${encodeURIComponent('Rückfrage Stellvertretungseinsatz ' + fmtDate(e.datum))}&body=${encodeURIComponent(`Guten Tag\n\nBeim Einsatz vom ${fmtDate(e.datum)} in ${standortName(e.standortNr)} (${r.name}, ${r.persNr}) haben wir eine Unklarheit:\n${r.hinweise.join('\n')}\n\nAngaben Stellvertretung: ${e.von}–${e.bis}, ${e.funktion}, Mittagessen ${e.mittag ? 'ja' : 'nein'}${v ? `\nVisum Leitung: ${vz.zeit}, ${vz.funktion}, Mittagessen ${vz.mittag}` : ''}\n\nBitte um kurze Rückmeldung.\n\nFreundliche Grüsse\nAdministration Stellvertretung`)}">Rückfrage per Mail</a>
+  <button class="cl">Schliessen</button>`,
+    (el, close) => {
+      $('.cl', el).onclick = close;
+      if ($('#uv', el)) $('#uv', el).onclick = () => { r.manuell = { v, grund: 'Visum übernommen' }; evaluate(r); r.hinweise = ['Werte aus Visum übernommen']; close(); render(); };
+      if ($('#ma', el)) $('#ma', el).onclick = () => { const g = prompt('Begründung (wird in der Excel-Datei vermerkt):'); if (!g) return; r.manuell = { v: null, grund: g }; evaluate(r); r.hinweise = ['manuell: ' + g]; close(); render(); };
+      if ($('#rv', el)) $('#rv', el).onclick = () => { r.manuell = null; evaluate(r); close(); render(); };
+    });
+}
+function csv(name, rows, alle) {
+  const head = ['Personalnummer', 'Name', 'Datum', 'Standort', 'Funktion', 'Von', 'Bis', 'Stunden', 'Mittagessen', 'Visiert von', 'Visiert am', 'Visum-Art', 'Status', 'Hinweise'];
+  const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
+  const lines = rows.map(r => { const f = final(r), v = f.v; const [y, m, d] = r.e.datum.split('-');
+    return [r.persNr, r.name, `${d}.${m}.${y}`, standortName(r.e.standortNr), f.funktion, f.von, f.bis, hours(hhmmToMin(f.von), hhmmToMin(f.bis)), f.mittag ? 'ja' : 'nein', v ? v.visiertVon : '', v ? fmtStamp(v.visiertAm) : '', v ? (v.pinTyp === 'ferien' ? 'Ferien-PIN' : 'Stamm-PIN') : '', STAT[r.status][1].replace(/^\S+ /, ''), (r.manuell ? r.manuell.grund + ' · ' : '') + r.hinweise.join(' · ')].map(q).join(';'); });
+  const blob = new Blob(['﻿' + [head.map(q).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
+}
+
+/* ---------- Visa-Archiv ---------- */
+function tabArchiv(el) {
+  const all = Object.values(D.visa).sort((a, b) => b.visiertAm.localeCompare(a.visiertAm));
+  const offen = all.filter(v => v.gueltig && !v.storniert && !D.abgerechnet[v.code]);
+  const ung = all.filter(v => !v.gueltig);
+  el.innerHTML = `<div class="card"><h2>Visa-Archiv</h2><div class="sub">${all.length} Visa gespeichert · ${Object.keys(D.abgerechnet).length} Einsätze abgerechnet · ${offen.length} Visa noch ohne Abrechnung · ${ung.length} ungültig</div>
+  <label class="l">Suche (Personalnummer, Name der Leitung, Standort)</label><input id="q">
+  <div style="overflow-x:auto;margin-top:10px"><table id="t"></table></div></div>
+  <div class="card"><h2>Eingelesene Dateien</h2>${D.dateien.length ? `<table><tr><th>Datei</th><th>Art</th><th>Einträge</th><th>Eingelesen</th></tr>${D.dateien.slice(-30).reverse().map(f => `<tr><td>${esc(f.name)}</td><td>${f.typ === 'stv' ? 'Stellvertretung' : 'Leitung'}</td><td>${f.n}</td><td>${fmtStamp(f.am)}</td></tr>`).join('')}</table>` : '<p class="sub">Noch keine.</p>'}</div>`;
+  const draw = () => {
+    const q = $('#q', el).value.trim().toLowerCase();
+    const list = all.filter(v => !q || (v.persNr + ' ' + v.visiertVon + ' ' + standortName(v.standortNr)).toLowerCase().includes(q)).slice(0, 300);
+    $('#t', el).innerHTML = `<tr><th>Datum</th><th>Pers.-Nr.</th><th>Standort</th><th>Funktion</th><th>Zeit</th><th>Visiert von</th><th>Status</th></tr>` + list.map(v => `<tr><td>${fmtDateShort(v.datum)}${v.datum.slice(0, 4)}</td><td>${v.persNr}</td><td>${esc(standortName(v.standortNr))}</td><td>${esc(v.funktion)}</td><td>${minToHHMM(v.von)}–${minToHHMM(v.bis)}</td><td>${esc(v.visiertVon)}${v.pinTyp === 'ferien' ? ' <span class="bd b-acc">Ferien-PIN</span>' : ''}</td>
+      <td>${!v.gueltig ? `<span class="bd b-err">ungültig</span> <span class="sub">${esc(v.grund)}</span>` : v.storniert ? '<span class="bd b-err">storniert</span>' : D.abgerechnet[v.code] ? '<span class="bd b-gray">abgerechnet</span>' : '<span class="bd b-warn">noch nicht abgerechnet</span>'}</td></tr>`).join('');
+  };
+  $('#q', el).oninput = draw; draw();
+}
+
+/* ---------- Sicherung ---------- */
+function tabSicherung(el) {
+  el.innerHTML = `<div class="card"><h2>Sicherung</h2>
+  <p>Die Prüfdatei speichert Schlüssel, Visa-Archiv und Abrechnungen nur in diesem Browser. Speichere regelmässig eine Sicherung, zum Beispiel nach jeder Abrechnung, und lege sie auf einem geschützten Laufwerk ab.</p>
+  <div class="info" style="margin-top:12px">Die Sicherung enthält die Standort-Schlüssel. Bitte wie ein Passwort behandeln.</div>
+  <button class="pri" id="sv">Sicherung speichern</button>
+  <label class="btn">Sicherung laden<input type="file" id="ld" accept=".json" hidden></label>
+  <button class="danger" id="rs">Alles löschen (nur für Tests)</button></div>`;
+  $('#sv', el).onclick = () => shareOrDownload('admin_sicherung_' + todayISO() + '.json', { typ: 'admin-sicherung', version: 1, gespeichertAm: nowLocalISO(), ...D });
+  $('#ld', el).onchange = async ev => { try { const d = await readJSONFile(ev.target.files[0]); if (d.typ !== 'admin-sicherung') throw new Error('Das ist keine Admin-Sicherung.'); if (!confirm('Sicherung laden? Der aktuelle Stand in diesem Browser wird ersetzt.')) return; D = { keys: d.keys || {}, visa: d.visa || {}, abgerechnet: d.abgerechnet || {}, dateien: d.dateien || [] }; persist(); ROWS.forEach(evaluate); toast('Sicherung geladen'); render(); } catch (e) { alert(e.message); } };
+  $('#rs', el).onclick = () => { if (confirm('Wirklich alles löschen? Schlüssel, Archiv und Abrechnungen gehen verloren.') && confirm('Ganz sicher?')) { D = { keys: {}, visa: {}, abgerechnet: {}, dateien: [] }; ROWS = []; LOADMSG = []; persist(); render(); } };
+}
+
+render();
+</script></body></html>

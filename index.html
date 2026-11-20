@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="de-CH"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StV-Erfassung · Demo</title><link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css"></head>
+<body><div class="wrap">
+<header class="top"><div><h1>StV-Erfassung · Demo</h1><div class="sub">Schulergänzende Betreuung · Stellvertretungseinsätze digital visieren</div></div></header>
+<div class="info">Demo-Version zum Ausprobieren. Alle Eingaben bleiben im Browser des jeweiligen Geräts. Es werden keine Daten an einen Server geschickt.</div>
+<a class="card" href="stv.html" style="display:block;text-decoration:none;color:inherit;border-left:0">
+  <span class="bd" style="background:#E1F5EE;color:#085041">1 · eigenes Handy</span><h2 style="margin-top:8px">Stellvertretung</h2><p class="sub">Einsätze erfassen, QR-Code zeigen, Quittung scannen, Abrechnung senden.</p></a>
+<a class="card" href="leitung.html" style="display:block;text-decoration:none;color:inherit">
+  <span class="bd" style="background:#EEEDFE;color:#3C3489">2 · Betreuungshandy</span><h2 style="margin-top:8px">Leitung</h2><p class="sub">Leitungsmodus mit Stamm-PIN und Ferien-PIN: visieren, Quittung zeigen, Visa exportieren.</p></a>
+<a class="card" href="admin.html" style="display:block;text-decoration:none;color:inherit">
+  <span class="bd" style="background:#FAECE7;color:#712B13">3 · Büro-PC</span><h2 style="margin-top:8px">Administration</h2><p class="sub">Standort-Schlüssel ausgeben, Dateien abgleichen, Abweichungen klären, Excel-Export.</p></a>
+<div class="card"><h2>So testest du die Demo</h2>
+<ol style="margin-left:20px;font-size:15.5px;line-height:1.6">
+<li><b>Administration</b> (am PC): «Standorte und Schlüssel» → für Test-Betreuung 1 «Schlüssel erzeugen». Der Einrichtungs-QR-Code erscheint.</li>
+<li><b>Leitung</b> (zweites Handy): Leitungsseite öffnen, Einrichtungs-QR-Code vom PC scannen, Stamm-PIN festlegen.</li>
+<li><b>Stellvertretung</b> (eigenes Handy): Profil anlegen, Einsatz in Test-Betreuung 1 erfassen, QR-Code zeigen.</li>
+<li><b>Leitung</b> scannt, prüft, visiert. <b>Stellvertretung</b> scannt die Quittung.</li>
+<li>Beide exportieren ihre Datei (per Mail an dich selbst) und du lädst beide Dateien in der <b>Administration</b>.</li>
+</ol>
+<p class="note">Mit nur einem Gerät: Seiten in zwei Browser-Tabs öffnen und statt zu scannen «Code eintippen» bzw. «Einrichtungs-Code einfügen» nutzen.</p></div>
+<button class="danger" id="rs">Demo auf diesem Gerät zurücksetzen</button>
+</div>
+<script>
+document.getElementById('rs').onclick=()=>{if(confirm('Alle Demo-Daten (Stellvertretung, Leitung, Administration) auf diesem Gerät löschen?')){['stv_data_v1','lei_data_v1','adm_data_v1'].forEach(k=>localStorage.removeItem(k));alert('Zurückgesetzt.');}};
+</script></body></html>
