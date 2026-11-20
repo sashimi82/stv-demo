@@ -2,9 +2,9 @@
 <html lang="de-CH"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StV-Prüfung · Administration</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=4">
-<script src="qrlib.js?v=4"></script><script src="shared.js?v=4"></script>
-</head><body class="adm"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 4 · 20.11.2026</div>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=5">
+<script src="qrlib.js?v=5"></script><script src="shared.js?v=5"></script>
+</head><body class="adm"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 5 · 20.11.2026</div>
 <script>
 const KEY = 'adm_data_v1';
 let D = store(KEY, { keys: {}, visa: {}, abgerechnet: {}, dateien: [] });
@@ -28,10 +28,9 @@ function render() {
 function tabStandorte(el) {
   el.innerHTML = `<div class="card"><h2>Standorte und Schlüssel</h2>
   <p class="sub" style="margin-bottom:12px">Pro Betreuung einen Schlüssel erzeugen und den Einrichtungs-QR-Code mit dem Betreuungshandy scannen. Ein neuer Schlüssel sperrt den alten (z. B. wenn ein Handy verloren ging).</p>
-  <table><tr><th>Standort</th><th>Schlüssel</th><th>Erstellt</th><th></th></tr>
-  ${CONFIG.standorte.map(s => { const k = curKey(s.nr); return `<tr><td>${esc(s.name)}</td><td>${k ? 'Nr. ' + k.keyId : '<span class="sub">noch keiner</span>'}</td><td>${k ? fmtStamp(k.erstellt) : ''}</td>
-    <td style="text-align:right">${k ? `<button class="small" data-qr="${s.nr}">Einrichtungs-QR zeigen</button> ` : ''}<button class="small" data-new="${s.nr}">${k ? 'Neuer Schlüssel' : 'Schlüssel erzeugen'}</button></td></tr>`; }).join('')}
-  </table></div>`;
+  ${CONFIG.standorte.map(s => { const k = curKey(s.nr); return `<div class="srow"><div><b>${esc(s.name)}</b><div class="sub">${k ? 'Schlüssel Nr. ' + k.keyId + ' · erstellt ' + fmtStamp(k.erstellt) : 'noch kein Schlüssel'}</div></div>
+    <div class="btngroup" style="margin-top:0">${k ? `<button class="small" data-qr="${s.nr}">Einrichtungs-QR zeigen</button>` : ''}<button class="small" data-new="${s.nr}">${k ? 'Neuer Schlüssel' : 'Schlüssel erzeugen'}</button></div></div>`; }).join('')}
+  </div>`;
   $$('[data-new]', el).forEach(b => b.onclick = () => {
     const nr = +b.dataset.new, list = D.keys[nr] = D.keys[nr] || [];
     if (list.length && !confirm('Neuen Schlüssel für ' + standortName(nr) + ' erzeugen? Der bisherige wird gesperrt: Visa, die danach noch damit erteilt werden, sind markiert. Das Betreuungshandy muss neu eingerichtet werden.')) return;
@@ -145,7 +144,7 @@ function tabPruefung(el) {
   ${ROWS.length ? `<div class="card" style="margin-top:14px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><h2>Ergebnis</h2>
     <div class="sub">${cnt('ok') + cnt('manuell')} in Ordnung · ${cnt('diff')} Abweichungen · ${cnt('none') + cnt('manip') + cnt('storno')} ohne gültiges Visum · ${cnt('dup')} schon abgerechnet</div></div>
-    <div style="overflow-x:auto"><table><tr><th></th><th>Person</th><th>Datum</th><th>Standort</th><th>Funktion</th><th>Zeit</th><th>Std.</th><th>Mittag</th><th>Status</th><th>Hinweise</th><th></th></tr>
+    <div class="scrollx"><table><tr><th></th><th>Person</th><th>Datum</th><th>Standort</th><th>Funktion</th><th>Zeit</th><th>Std.</th><th>Mittag</th><th>Status</th><th>Hinweise</th><th></th></tr>
     ${ROWS.map((r, i) => { const f = final(r); return `<tr class="${r.sel ? '' : ''}"><td><input type="checkbox" data-s="${i}" ${r.sel ? 'checked' : ''} ${['ok', 'manuell'].includes(r.status) ? '' : 'disabled'} style="width:auto"></td>
       <td>${esc(r.name)}<div class="sub">${esc(r.persNr)}</div></td><td>${fmtDateShort(r.e.datum)}${r.e.datum.slice(0, 4)}</td><td>${esc(standortName(r.e.standortNr))}</td><td>${esc(f.funktion)}</td>
       <td style="white-space:nowrap">${f.von}–${f.bis}</td><td>${hours(hhmmToMin(f.von), hhmmToMin(f.bis))}</td><td>${f.mittag ? 'ja' : 'nein'}</td>
@@ -214,8 +213,8 @@ function tabArchiv(el) {
   const ung = all.filter(v => !v.gueltig);
   el.innerHTML = `<div class="card"><h2>Visa-Archiv</h2><div class="sub">${all.length} Visa gespeichert · ${Object.keys(D.abgerechnet).length} Einsätze abgerechnet · ${offen.length} Visa noch ohne Abrechnung · ${ung.length} ungültig</div>
   <label class="l">Suche (Personalnummer, Name der Leitung, Standort)</label><input id="q">
-  <div style="overflow-x:auto;margin-top:10px"><table id="t"></table></div></div>
-  <div class="card"><h2>Eingelesene Dateien</h2>${D.dateien.length ? `<table><tr><th>Datei</th><th>Art</th><th>Einträge</th><th>Eingelesen</th></tr>${D.dateien.slice(-30).reverse().map(f => `<tr><td>${esc(f.name)}</td><td>${f.typ === 'stv' ? 'Stellvertretung' : 'Leitung'}</td><td>${f.n}</td><td>${fmtStamp(f.am)}</td></tr>`).join('')}</table>` : '<p class="sub">Noch keine.</p>'}</div>`;
+  <div class="scrollx" style="margin-top:10px"><table id="t"></table></div></div>
+  <div class="card"><h2>Eingelesene Dateien</h2>${D.dateien.length ? `<div class="scrollx"><table><tr><th>Datei</th><th>Art</th><th>Einträge</th><th>Eingelesen</th></tr>${D.dateien.slice(-30).reverse().map(f => `<tr><td>${esc(f.name)}</td><td>${f.typ === 'stv' ? 'Stellvertretung' : 'Leitung'}</td><td>${f.n}</td><td>${fmtStamp(f.am)}</td></tr>`).join('')}</table></div>` : '<p class="sub">Noch keine.</p>'}</div>`;
   const draw = () => {
     const q = $('#q', el).value.trim().toLowerCase();
     const list = all.filter(v => !q || (v.persNr + ' ' + v.visiertVon + ' ' + standortName(v.standortNr)).toLowerCase().includes(q)).slice(0, 300);

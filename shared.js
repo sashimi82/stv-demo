@@ -14,7 +14,7 @@ const CONFIG = {
     { nr: 6, name: 'Test-Betreuung 6' },
   ],
   // Reihenfolge nie ändern, nur hinten ergänzen (max. 8 Funktionen).
-  funktionen: ['BL', 'GL', 'FAB', 'BM', 'Assistenz'],
+  funktionen: ['BL', 'GL', 'FABE', 'BM', 'Assistenz'],
   adminEmail: 'stv-admin@example.ch',      // Adresse der Administration (Demo)
   nachtraeglichAbTagen: 3,                  // ab wann ein Visum als «nachträglich» gilt
   maxNachtraeglichTage: 60,                 // ältere Einsätze kann die Leitung nicht mehr visieren

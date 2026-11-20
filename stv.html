@@ -4,9 +4,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="StV-Einsätze"><meta name="theme-color" content="#0F6E56">
 <title>StV-Einsätze</title>
-<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=4">
-<script src="qrlib.js?v=4"></script><script src="shared.js?v=4"></script>
-</head><body class="stv"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 4 · 20.11.2026</div>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="shared.css?v=5">
+<script src="qrlib.js?v=5"></script><script src="shared.js?v=5"></script>
+</head><body class="stv"><div class="wrap" id="app"></div><div class="note center" style="margin:-70px 0 30px">Demo-Version 5 · 20.11.2026</div>
 <script>
 const KEY = 'stv_data_v1';
 let D = store(KEY, { profil: null, eintraege: [], verlauf: [] });
@@ -63,10 +63,10 @@ function viewHome() {
   <button class="dark" id="send" ${D.eintraege.length ? '' : 'disabled'}>Abrechnung senden</button>
   <div class="card" style="margin-top:22px">
     <h3 style="margin-top:0">Weiteres</h3>
-    <button class="small" id="bk">Sicherung herunterladen</button>
-    <label class="btn small" style="display:inline-block;width:auto;margin:6px 0 0;font-size:14px;padding:7px 12px">Sicherung laden<input type="file" id="rs" accept=".json,application/json" hidden></label>
+    <div class="btngroup"><button class="small" id="bk">Sicherung herunterladen</button>
+    <label class="btn small" style="display:inline-block;width:auto;font-size:14px;padding:7px 12px">Sicherung laden<input type="file" id="rs" accept=".json,application/json" hidden></label>
     <button class="small" id="hist">Frühere Abrechnungen (${D.verlauf.length})</button>
-    <button class="small" id="prof">Profil</button>
+    <button class="small" id="prof">Profil</button></div>
   </div>`;
   $$('.it', app).forEach(el => el.onclick = () => viewEntry(el.dataset.id));
   $('#neu').onclick = () => viewForm();
@@ -88,15 +88,17 @@ function viewHome() {
 /* ---------- Einsatz erfassen / bearbeiten ---------- */
 function viewForm(id) {
   const old = id ? D.eintraege.find(e => e.code === id) : null;
-  const e = old || { datum: todayISO(), standortNr: (D.eintraege[D.eintraege.length - 1] || {}).standortNr || CONFIG.standorte[0].nr, funktion: '', von: null, bis: null, mittag: null };
+  const e = old || { datum: todayISO(), standortNr: (D.eintraege[D.eintraege.length - 1] || {}).standortNr || CONFIG.standorte[0].nr, funktion: '', von: null, bis: null, mittag: true };
+  const timeSel = (id, m) => { const r = m == null ? null : Math.round(m / 10) * 10, hh = r == null ? '' : Math.floor(r / 60), mm = r == null ? 0 : r % 60;
+    return `<div class="timepick"><select id="${id}h" aria-label="Stunde"><option value="">Std.</option>${Array.from({ length: 17 }, (_, i) => i + 5).map(h => `<option value="${h}" ${h === hh ? 'selected' : ''}>${pad2(h)}</option>`).join('')}</select><span>:</span>
+    <select id="${id}m" aria-label="Minuten">${[0, 10, 20, 30, 40, 50].map(x => `<option value="${x}" ${x === mm ? 'selected' : ''}>${pad2(x)}</option>`).join('')}</select></div>`; };
   app.innerHTML = `<button class="back" id="b0">‹ Zurück</button>
   <header class="top"><h1>${old ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}</h1><span class="role">Stellvertretung</span></header>
   <div class="card">
     <label class="l">Datum</label><input type="date" id="dat" value="${e.datum}" max="${todayISO()}">
     <label class="l">Standort</label><select id="sto">${CONFIG.standorte.map(s => `<option value="${s.nr}" ${s.nr === e.standortNr ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
     <label class="l">Funktion</label><div class="chips" id="fun">${CONFIG.funktionen.map(f => `<span class="chip ${f === e.funktion ? 'on' : ''}" data-v="${f}">${f}</span>`).join('')}</div>
-    <div class="row2"><div><label class="l">Von</label><input type="time" id="von" step="300" value="${e.von != null ? minToHHMM(e.von) : ''}"></div>
-    <div><label class="l">Bis</label><input type="time" id="bis" step="300" value="${e.bis != null ? minToHHMM(e.bis) : ''}"></div></div>
+    <div class="times"><div><label class="l">Von</label>${timeSel('von', e.von)}</div><div><label class="l">Bis</label>${timeSel('bis', e.bis)}</div></div>
     <label class="l">Mittagessen konsumiert</label><div class="chips" id="mit"><span class="chip ${e.mittag === true ? 'on' : ''}" data-v="1">Ja</span><span class="chip ${e.mittag === false ? 'on' : ''}" data-v="0">Nein</span></div>
     <div class="err" id="err"></div>
     <button class="pri" id="ok">${old ? 'Speichern' : 'Zum Visieren'}</button>
@@ -107,11 +109,12 @@ function viewForm(id) {
   $('#back').onclick = $('#b0').onclick = () => old ? viewEntry(old.code) : viewHome();
   $('#ok').onclick = () => {
     const err = m => $('#err').textContent = m;
-    const datum = $('#dat').value, fun = $('#fun .on'), mit = $('#mit .on'), vs = $('#von').value, bs = $('#bis').value;
+    const datum = $('#dat').value, fun = $('#fun .on'), mit = $('#mit .on');
+    const vs = $('#vonh').value === '' ? '' : $('#vonh').value + ':' + $('#vonm').value, bs = $('#bish').value === '' ? '' : $('#bish').value + ':' + $('#bism').value;
     if (!datum) return err('Bitte Datum wählen.');
     if (datum > todayISO()) return err('Einsätze in der Zukunft können noch nicht erfasst werden.');
     if (!fun) return err('Bitte Funktion wählen.');
-    if (!vs || !bs) return err('Bitte Von und Bis eingeben.');
+    if (!vs || !bs) return err('Bitte bei Von und Bis die Stunde wählen.');
     let von = hhmmToMin(vs), bis = hhmmToMin(bs);
     if (von % 5 || bis % 5) { von = Math.round(von / 5) * 5; bis = Math.round(bis / 5) * 5; }
     if (bis <= von) return err('«Bis» muss nach «Von» liegen.');

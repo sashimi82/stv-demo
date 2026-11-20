@@ -72,3 +72,14 @@ tr.sel{background:#FAEEDA55}
 .demo{font-size:13px;background:#ECEAE3;color:#444441;border-radius:8px;padding:8px 10px;margin-bottom:12px}
 .back{display:inline-flex;align-items:center;gap:4px;width:auto;margin:0 0 6px;padding:6px 0;border:none;background:none;color:var(--acc);font-size:16px;font-weight:600;text-decoration:none;cursor:pointer}
 .backbig{margin-top:26px!important;padding:16px!important;font-size:18px!important;border:2px solid var(--acc)!important;color:var(--acc)!important;background:#fff!important}
+/* iPhone: Datums-/Zeitfelder nicht breiter als ihr Platz */
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;min-height:48px;text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+.row2>div{min-width:0;flex:1 1 0}
+.btngroup{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.btngroup>button,.btngroup>label,.btngroup>a{margin:0!important}
+.timepick{display:inline-flex;gap:4px;align-items:center}.timepick select{flex:none;width:66px;padding:10px 6px;text-align:center}.times{display:flex;flex-wrap:nowrap;gap:0 18px}.times>div{flex:none}.timepick span{font-weight:650}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding:12px 0}
+.scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}.scrollx table{min-width:640px}
+@media(max-width:380px){.times{gap:0 10px}.timepick select{width:56px;padding:10px 2px}}
+@media(max-width:340px){.timepick{gap:2px}.timepick select{width:50px;font-size:16px}}
