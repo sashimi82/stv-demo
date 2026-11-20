@@ -45,9 +45,13 @@ function showSetup(nr) {
   sheet(`<h2>Einrichtung ${esc(standortName(nr))}</h2>
     <div class="info">Nur dem Leitungsteam zeigen. Wer diesen Code hat, kann für diesen Standort visieren.</div>
     <div class="card center"><div class="sub">Im Leitungsmodus «Einrichtungs-QR-Code scannen» wählen</div><div class="qrbox">${qrSVG(txt)}</div>
-    <div class="sub">oder Code einfügen:</div><div class="mono" style="word-break:break-all;font-size:15px;margin-top:4px">${txt}</div>
-    <button class="small" id="cp" style="margin-top:10px">Code kopieren</button></div><button class="cl">Schliessen</button>`,
-    (el, close) => { $('.cl', el).onclick = close; $('#cp', el).onclick = () => navigator.clipboard.writeText(txt).then(() => toast('Kopiert')); });
+    <div class="sub">oder Code kopieren und im Leitungsmodus einfügen:</div>
+    <textarea id="ct" class="mono" readonly rows="2" style="font-size:15px;margin-top:6px;text-align:center;resize:none">${txt}</textarea>
+    <button class="pri" id="cp">Code kopieren</button></div>
+    <div class="card"><div class="demo" style="margin-bottom:0">Demo mit nur einem Gerät: Dieses Gerät direkt als Betreuungshandy für ${esc(standortName(nr))} einrichten.</div>
+    <a class="btn" href="leitung.html#setup=${encodeURIComponent(txt)}">Hier als Betreuungshandy einrichten</a></div>
+    <button class="cl">Schliessen</button>`,
+    (el, close) => { $('.cl', el).onclick = close; const ct = $('#ct', el); ct.onclick = () => ct.select(); $('#cp', el).onclick = () => copyText(txt); });
 }
 
 /* ---------- Dateien laden ---------- */

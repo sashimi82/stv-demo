@@ -139,6 +139,7 @@ function viewEntry(id) {
       <div class="sub">Zeige diesen QR-Code der Leitung</div>
       <div class="qrbox">${qrSVG(QR_ENTRY + e.code)}</div>
       <div class="sub">Notlösung: Code abtippen lassen</div><div class="code">${group4(e.code)}</div>
+      <button class="small" id="cc" style="margin-top:8px">Code kopieren</button>
     </div>
     <button class="pri" id="sq">Quittung scannen</button>
     <button id="tq">Quittung eintippen</button>
@@ -147,14 +148,15 @@ function viewEntry(id) {
   $('#back').onclick = viewHome;
   if (vis) return;
   $('#sq').onclick = scanQuittung;
+  $('#cc').onclick = () => copyText(group4(e.code));
   $('#ed').onclick = () => viewForm(e.code);
   $('#del').onclick = () => { if (confirm('Diesen Einsatz löschen?')) { D.eintraege = D.eintraege.filter(x => x !== e); persist(); viewHome(); } };
   $('#tq').onclick = () => sheet(`<h2>Quittung eintippen</h2>
-    <label class="l">Quittung (4 Zeichen)</label><input id="qt" class="mono" maxlength="4" autocapitalize="characters" style="font-size:24px;letter-spacing:6px;text-align:center">
+    <label class="l">Quittung (4 Zeichen)</label><input id="qt" class="mono" autocapitalize="characters" autocorrect="off" spellcheck="false" style="font-size:24px;letter-spacing:6px;text-align:center">
     <label class="l">Name der Leitung, die visiert hat</label><input id="qn">
     <div class="err" id="qe"></div><button class="pri" id="qok">Bestätigen</button><button class="cl">Abbrechen</button>`,
     (el, close) => {
-      $('.cl', el).onclick = close;
+      $('.cl', el).onclick = close; codeInputBehaviour($("#qt", el), 4, QR_QUITT);
       $('#qok', el).onclick = () => {
         const t = b32norm($('#qt', el).value), n = $('#qn', el).value.trim();
         if (!/^[0-9A-Z]{4}$/.test(t) || [...t].some(c => !B32.includes(c))) return $('#qe', el).textContent = 'Die Quittung hat 4 Zeichen (Buchstaben und Zahlen).';

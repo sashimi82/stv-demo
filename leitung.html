@@ -14,6 +14,8 @@ const persist = () => save(KEY, D);
 askPersist();
 const app = $('#app');
 let ROLE = null, lastName = '', idleT = null;
+let pendingSetup = null; // Demo: Einrichtung über Link leitung.html#setup=…
+if (location.hash.startsWith('#setup=')) { pendingSetup = decodeURIComponent(location.hash.slice(7)); history.replaceState(null, '', location.pathname); }
 const isStamm = () => ROLE === 'stamm';
 const sName = () => standortName(D.setup.standortNr);
 const head = (t) => `<header class="top"><div><h1>${t}</h1><div class="sub">${esc(sName())}</div></div><span class="role">${ROLE === 'ferien' ? 'Ferien-PIN' : 'Leitungsmodus'}</span></header>`;
@@ -39,13 +41,13 @@ function viewSetup(neu) {
   ${!window.navigator.standalone && !matchMedia('(display-mode: standalone)').matches ? '<div class="info"><b>Zuerst:</b> Diese Seite zum Home-Bildschirm hinzufügen und von dort öffnen. Erst dann einrichten: Nur so bleiben die Visa sicher gespeichert.</div>' : ''}
   <div class="card"><p>Die Administration gibt für jede Betreuung einen <b>Einrichtungs-QR-Code</b> mit dem Standort-Schlüssel ab.</p>
     <button class="pri" id="sc">Einrichtungs-QR-Code scannen</button>
-    <label class="l" style="margin-top:16px">oder Einrichtungs-Code einfügen</label><input id="tx" class="mono" placeholder="LS1:…">
+    <label class="l" style="margin-top:16px">oder Einrichtungs-Code einfügen</label><textarea id="tx" class="mono" rows="2" placeholder="LS1:…" autocapitalize="off" autocorrect="off" spellcheck="false" style="resize:none"></textarea>
     <div class="err" id="err"></div><button id="ok">Weiter</button>
     ${neu ? '<button id="back">Abbrechen</button>' : ''}</div>`;
   const use = txt => {
-    const m = /^LS1:(\d+):(\d+):([0-9A-Z]{26})$/.exec(String(txt).trim());
-    if (!m) return $('#err').textContent = 'Das ist kein gültiger Einrichtungs-Code.';
-    const nr = +m[1]; if (!CONFIG.standorte.some(s => s.nr === nr)) return $('#err').textContent = 'Unbekannter Standort im Code.';
+    const p = parseSetup(txt);
+    if (p.err) return $('#err').textContent = p.err;
+    const nr = p.nr, m = [null, p.nr, p.keyId, p.secret]; if (!CONFIG.standorte.some(s => s.nr === nr)) return $('#err').textContent = 'Unbekannter Standort im Code.';
     if (D.setup && D.setup.standortNr !== nr && D.visa.length && !confirm('Achtung: Dieses Handy war für ' + standortName(D.setup.standortNr) + ' eingerichtet. Wirklich auf ' + standortName(nr) + ' wechseln? Bitte vorher die Visa exportieren.')) return;
     D.setup = { standortNr: nr, keyId: +m[2], secret: m[3], eingerichtet: nowLocalISO() };
     if (neu && D.stammHash) { persist(); toast('Neuer Schlüssel gespeichert'); return viewHome(); }
@@ -54,6 +56,7 @@ function viewSetup(neu) {
   $('#sc').onclick = async () => { const t = await scanQR('Einrichtungs-QR-Code scannen'); if (t) use(t); };
   $('#ok').onclick = () => use($('#tx').value);
   if ($('#back')) $('#back').onclick = viewHome;
+  if (pendingSetup) { $('#tx').value = pendingSetup; pendingSetup = null; use($('#tx').value); }
 }
 function viewNewPin(change) {
   app.innerHTML = `<header class="top"><h1>${change ? 'Stamm-PIN ändern' : 'Stamm-PIN festlegen'}</h1><span class="role">Leitungsmodus</span></header>
@@ -116,7 +119,7 @@ function viewHome() {
   <button id="lk">Sperren</button>`;
   $('#sc').onclick = async () => { const t = await scanQR('QR-Code der Stellvertretung scannen'); if (!t) return; if (!t.startsWith(QR_ENTRY)) return alert('Das ist kein Einsatz-Code der Stellvertretungs-App.'); checkCode(t.slice(QR_ENTRY.length)); };
   $('#tp').onclick = () => sheet(`<h2>Code eintippen</h2><label class="l">16 Zeichen, wie auf dem Handy der Stellvertretung</label>
-    <input id="ci" class="mono" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-size:22px;letter-spacing:2px;text-align:center" placeholder="XXXX-XXXX-XXXX-XXXX">
+    <input id="ci" class="mono" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="font-size:22px;letter-spacing:2px;text-align:center" placeholder="XXXX-XXXX-XXXX-XXXX">
     <div class="err" id="ce"></div><button class="pri" id="cok">Prüfen</button><button class="cl">Abbrechen</button>`,
     (el, close) => { codeInputBehaviour($('#ci', el)); $('.cl', el).onclick = close; $('#cok', el).onclick = () => { const r = unpackEntry($('#ci', el).value); if (r.err) return $('#ce', el).textContent = r.err; close(); checkCode(r.code); }; });
   $$('.it', app).forEach(el => el.onclick = () => viewVisum(el.dataset.c));
@@ -162,9 +165,11 @@ function viewQuitt(v) {
   <div class="sub">Die Stellvertretung scannt jetzt diesen QR-Code</div>
   <div class="qrbox">${qrSVG(QR_QUITT + v.code + ':' + v.tag + ':' + stamp + ':' + encodeURIComponent(v.visiertVon))}</div>
   <div class="sub">Notlösung: Quittung zum Abtippen</div><div class="code" style="font-size:34px;letter-spacing:8px">${v.tag}</div>
+  <button class="small" id="cq" style="margin-top:6px">Quittung kopieren</button>
   <p class="note">${v.persNr} · ${fmtDateShort(v.datum)} · ${minToHHMM(v.von)}–${minToHHMM(v.bis)} · ${esc(v.funktion)} · ${esc(v.visiertVon)}</p></div>
   <button class="pri" id="ok">Fertig</button>`;
   $('#ok').onclick = viewHome;
+  $('#cq').onclick = () => copyText(v.tag);
 }
 function viewVisum(code) {
   const v = D.visa.filter(x => x.code === code).sort((a, b) => a.storniert - b.storniert)[0]; if (!v) return viewHome();
@@ -227,5 +232,5 @@ async function exportVisa() {
   viewHome();
 }
 
-viewHome();
+if (pendingSetup) viewSetup(!!(D.setup && D.stammHash)); else viewHome();
 </script></body></html>

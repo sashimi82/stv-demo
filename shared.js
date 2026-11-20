@@ -217,6 +217,27 @@ async function shareOrDownload(filename, obj, title) {
 function readJSONFile(file) {
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => { try { res(JSON.parse(r.result)); } catch (e) { rej(new Error(file.name + ' ist keine gültige Datei')); } }; r.onerror = () => rej(r.error); r.readAsText(file); });
 }
-function codeInputBehaviour(inp) { // grosse Buchstaben, automatisch Bindestriche
-  inp.addEventListener('input', () => { const c = b32norm(inp.value).slice(0, 16); inp.value = c ? group4(c) : ''; });
+const cleanPaste = s => String(s ?? '').replace(/[\u200B-\u200D\uFEFF\u00A0\s]/g, '');
+function codeInputBehaviour(inp, len = 16, prefix = QR_ENTRY) { // grosse Buchstaben, automatisch Bindestriche, eingefügten Text bereinigen
+  inp.addEventListener('input', () => {
+    let v = cleanPaste(inp.value); const p = v.toUpperCase().lastIndexOf(prefix); if (p >= 0) v = v.slice(p + prefix.length);
+    const c = b32norm(v).replace(/[^0-9A-Z]/g, '').slice(0, len); inp.value = len === 16 && c ? group4(c) : c;
+  });
+}
+/** Einrichtungs-Code lesen, tolerant gegenüber Leerzeichen, Zeilenumbrüchen und Zusatztext */
+function parseSetup(txt) {
+  const s = cleanPaste(txt).toUpperCase();
+  const m = /LS1:(\d+):(\d+):([0-9A-Z]+)/.exec(s);
+  if (!m) return { err: s.length ? 'Im eingefügten Text fehlt der Anfang «LS1:». Bitte den ganzen Code kopieren (Knopf «Code kopieren» in der Administration).' : 'Bitte den Einrichtungs-Code einfügen.' };
+  const secret = b32norm(m[3]);
+  if (secret.length !== 26 || [...secret].some(c => !B32.includes(c))) return { err: 'Der Code ist unvollständig (' + secret.length + ' von 26 Zeichen nach der zweiten Zahl). Bitte nochmals kopieren.' };
+  return { nr: +m[1], keyId: +m[2], secret };
+}
+/** Text in die Zwischenablage, mit Rückfall für ältere Browser */
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); toast('Kopiert'); return true; } catch (e) { }
+  const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
+  ta.remove(); toast(ok ? 'Kopiert' : 'Kopieren nicht möglich: bitte Code im Feld markieren und kopieren'); return ok;
 }
