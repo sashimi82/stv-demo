@@ -11,7 +11,8 @@ Digitale Erfassung und Visierung von Stellvertretungseinsätzen in der Schulerg�
 | `leitung.html` | Leitung: Leitungsmodus mit Stamm-PIN und Ferien-PIN, visieren, Visa exportieren | Betreuungshandy |
 | `admin.html` | Administration: Standort-Schlüssel, Abgleich, Abweichungen, Excel-Export, Archiv | Büro-PC |
 | `shared.js` | gemeinsame Bausteine und **Einstellungen** (Standorte, Funktionen, Mail-Adresse) | – |
-| `shared.css`, `qrlib.js` | Gestaltung und QR-Code-Erzeugung | – |
+| `index.js`, `stv.js`, `leitung.js`, `admin.js` | Programmlogik der vier Seiten | – |
+| `shared.css`, `qrlib.js`, `jsQR.js` | Gestaltung, QR-Code-Erzeugung und QR-Code-Lesen (alles lokal, nichts aus dem Internet) | – |
 
 ## Auf GitHub Pages stellen (ca. 15 Minuten)
 
@@ -53,10 +54,16 @@ Oben in `shared.js` im Block `CONFIG`:
 - Jede Betreuung hat einen geheimen Standort-Schlüssel. Das Betreuungshandy unterschreibt damit jedes Visum (HMAC-SHA-256). Wird ein Visum nachträglich verändert, stimmt die Unterschrift nicht mehr.
 - Abgerechnet werden immer die Werte aus dem unterschriebenen Visum, nicht die Angaben aus der StV-Datei.
 - Die Ferien-PIN gilt nur im gewählten Zeitraum (max. 6 Wochen) und hat eingeschränkte Rechte.
+- Plausibilität: Einsätze nur zwischen 05:30 und 22:30 Uhr, höchstens 12 Stunden. Die Leitungs-App lehnt Überschneidungen derselben Person ab; die Administration prüft Überschneidungen und das Tagestotal über alle Standorte.
+- Die Administration liest nur Dateien im erwarteten Aufbau ein. Unzulässige Einträge werden abgewiesen. Ein gültiges Visum kann nicht durch eine gefälschte Kopie verdrängt werden.
+- Eine Sicherheitsregel (Content-Security-Policy) erlaubt nur die eigenen Skripte und verbietet jede Verbindung ins Internet.
+- Visa dürfen in beliebiger Reihenfolge und nachträglich eingeholt werden (nur Hinweis). Zeitstempel, die auf eine verstellte Uhr hindeuten, markiert die Administration und wählt diese Einsätze nicht automatisch zur Abrechnung aus.
+- Bekannte Restrisiken: Wer die Handy-Uhr verstellt, kann Zeitstempel beeinflussen (wird oft erkannt, nicht immer). Wer technisch versiert ist und das Betreuungshandy samt PIN in der Hand hat, kann den Standort-Schlüssel auslesen.
 
 ## Vor dem echten Einsatz (nicht Teil der Demo)
 
-- **QR-Leser lokal ablegen:** Auf iPhones lädt die Demo den QR-Leser «jsQR» von cdn.jsdelivr.net. Für den Betrieb die Datei von `https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js` herunterladen und als `jsQR.js` in diesen Ordner legen. Die App nimmt dann automatisch die lokale Kopie.
+- **Eigene Domain:** Auf einem Stadtserver mit eigener (Sub-)Domain betreiben, die keine anderen Anwendungen enthält. Der Browser-Speicher wird pro Domain geteilt.
+- Im Echtbetrieb den Demo-Link «Hier als Betreuungshandy einrichten» entfernen.
 - Mit der Informatik und der Datenschutzstelle klären, wo die Seiten liegen dürfen.
 - Testen, ob die Betreuungshandys (zentral verwaltet?) Home-Bildschirm-Apps und die Kamera im Browser erlauben.
 - Regelmässige Sicherung der Admin-Daten (Tab «Sicherung») festlegen. Sie enthält die Schlüssel.

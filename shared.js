@@ -18,8 +18,12 @@ const CONFIG = {
   adminEmail: 'stv-admin@example.ch',      // Adresse der Administration (Demo)
   nachtraeglichAbTagen: 3,                  // ab wann ein Visum als «nachträglich» gilt
   maxNachtraeglichTage: 60,                 // ältere Einsätze kann die Leitung nicht mehr visieren
-  // QR-Lesen auf iPhones: zuerst eine lokale Kopie (jsQR.js im selben Ordner), sonst CDN
-  jsqrUrls: ['./jsQR.js', 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'],
+  fruehesterBeginn: '05:30',                // Plausibilität: kein Einsatz vor dieser Zeit
+  spaetestesEnde: '22:30',                  //               und nach dieser Zeit
+  maxStundenEinsatz: 12,                    //               höchstens so viele Stunden pro Einsatz
+  maxStundenTag: 12,                        // Admin: Hinweis, wenn eine Person an einem Tag mehr arbeitet
+  // QR-Lesen auf iPhones: lokale Kopie (jsQR.js im selben Ordner), kein Nachladen aus dem Internet
+  jsqrUrls: ['./jsQR.js?v=7'],
 };
 
 /* ---------- kleine Helfer ---------- */
@@ -106,8 +110,18 @@ function unpackEntry(code) {
   const persNr = String(Number(b)).padStart(6, '0');
   const e = { code: c, persNr, datum: dayISO(day), von, bis, funktion: CONFIG.funktionen[fl >> 1] || '?', mittag: !!(fl & 1), standortNr };
   if (bis <= von) return { err: 'Ungültige Zeiten im Code.' };
+  if (e.funktion === '?') return { err: 'Unbekannte Funktion im Code.' };
   return e;
 }
+/** Plausibilität eines Einsatzes: leer = in Ordnung, sonst Begründung */
+function plausi(e) {
+  const a = hhmmToMin(CONFIG.fruehesterBeginn), z = hhmmToMin(CONFIG.spaetestesEnde);
+  if (e.von < a) return 'Beginn vor ' + CONFIG.fruehesterBeginn + ' Uhr ist nicht möglich.';
+  if (e.bis > z) return 'Ende nach ' + CONFIG.spaetestesEnde + ' Uhr ist nicht möglich.';
+  if (e.bis - e.von > CONFIG.maxStundenEinsatz * 60) return 'Ein Einsatz dauert höchstens ' + CONFIG.maxStundenEinsatz + ' Stunden.';
+  return '';
+}
+const overlaps = (a, b) => a.von < b.bis && b.von < a.bis;
 const QR_ENTRY = 'STV1:', QR_QUITT = 'QT1:', QR_SETUP = 'LS1:';
 
 /* ---------- Kryptografie (HMAC-SHA-256 mit dem Standort-Schlüssel) ---------- */

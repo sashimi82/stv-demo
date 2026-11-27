@@ -1,0 +1,205 @@
+const KEY = 'stv_data_v1';
+let D = store(KEY, { profil: null, eintraege: [], verlauf: [] });
+const persist = () => save(KEY, D);
+askPersist();
+const app = $('#app');
+const standalone = () => window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+const sortE = () => D.eintraege.sort((a, b) => (a.datum + minToHHMM(a.von)).localeCompare(b.datum + minToHHMM(b.von)));
+const badge = e => e.status === 'visiert' ? '<span class="bd b-ok">✓ visiert</span>' : '<span class="bd b-warn">offen</span>';
+const eLine = e => `${esc(standortName(e.standortNr))} · ${esc(e.funktion)} · ${minToHHMM(e.von)}–${minToHHMM(e.bis)} · Mittag ${e.mittag ? 'ja' : 'nein'}`;
+
+/* ---------- Profil ---------- */
+function viewSetup() {
+  const p = D.profil || {};
+  app.innerHTML = `${D.profil ? '<button class="back" id="b0">‹ Zurück</button>' : '<a class="back" href="index.html">‹ Startseite</a>'}
+  <header class="top"><h1>${D.profil ? 'Profil ändern' : 'Willkommen'}</h1><span class="role">Stellvertretung</span></header>
+  ${!standalone() ? `<div class="info"><b>Zuerst:</b> Füge diese Seite zum Home-Bildschirm hinzu (iPhone: Teilen-Symbol → «Zum Home-Bildschirm»; Android: Menü ⋮ → «Zum Startbildschirm hinzufügen») und öffne sie dann von dort. Nur so bleiben deine Einträge sicher gespeichert.</div>` : ''}
+  <div class="card">
+    <h2>Mein Profil</h2>
+    <label class="l">Vorname und Name</label><input id="name" autocomplete="name" value="${esc(p.name || '')}">
+    <label class="l">Personalnummer (6 Ziffern)</label><input id="pnr" inputmode="numeric" maxlength="6" value="${esc(p.persNr || '')}">
+    <div class="err" id="err"></div>
+    <p class="note">🔒 Wird nur auf diesem Handy gespeichert.</p>
+    <button class="pri" id="ok">Speichern</button>
+    ${D.profil ? '<button id="back">Abbrechen</button>' : ''}
+  </div>`;
+  $('#ok').onclick = () => {
+    const name = $('#name').value.trim(), pnr = $('#pnr').value.trim();
+    if (name.length < 3) return $('#err').textContent = 'Bitte Vor- und Nachnamen eingeben.';
+    if (!/^\d{6}$/.test(pnr)) return $('#err').textContent = 'Die Personalnummer hat genau 6 Ziffern.';
+    if (D.profil && D.profil.persNr !== pnr && D.eintraege.length) return $('#err').textContent = 'Personalnummer kann erst nach dem Senden der Abrechnung geändert werden.';
+    D.profil = { name, persNr: pnr }; persist(); viewHome();
+  };
+  if ($('#back')) $('#back').onclick = viewHome;
+  if ($('#b0')) $('#b0').onclick = viewHome;
+}
+
+/* ---------- Sammelblatt ---------- */
+function viewHome() {
+  if (!D.profil) return viewSetup();
+  sortE();
+  const offen = D.eintraege.filter(e => e.status !== 'visiert').length;
+  const std = D.eintraege.reduce((s, e) => s + hours(e.von, e.bis), 0);
+  app.innerHTML = `<a class="back" href="index.html">‹ Startseite</a>
+  <header class="top"><div><h1>Mein Sammelblatt</h1><div class="sub">${esc(D.profil.name)} · ${esc(D.profil.persNr)}</div></div><span class="role">Stellvertretung</span></header>
+  <div class="card">
+    ${D.eintraege.length ? `<div class="list">${D.eintraege.map(e => `
+      <div class="it" data-id="${e.code}"><div><div>${fmtDate(e.datum)}</div><div class="m">${eLine(e)}</div></div>${badge(e)}</div>`).join('')}</div>
+      <p class="note">${D.eintraege.length} Einsätze · ${std.toFixed(2).replace(/\.?0+$/, '')} Std.${offen ? ' · ' + offen + ' noch ohne Quittung' : ''}</p>`
+      : '<p class="sub">Noch keine Einsätze auf diesem Blatt. Erfasse deinen ersten Einsatz.</p>'}
+  </div>
+  <button class="pri" id="neu">＋ Neuer Einsatz</button>
+  <button id="scanq">Quittung scannen</button>
+  <button class="dark" id="send" ${D.eintraege.length ? '' : 'disabled'}>Abrechnung senden</button>
+  <div class="card" style="margin-top:22px">
+    <h3 style="margin-top:0">Weiteres</h3>
+    <div class="btngroup"><button class="small" id="bk">Sicherung herunterladen</button>
+    <label class="btn small" style="display:inline-block;width:auto;font-size:14px;padding:7px 12px">Sicherung laden<input type="file" id="rs" accept=".json,application/json" hidden></label>
+    <button class="small" id="hist">Frühere Abrechnungen (${D.verlauf.length})</button>
+    <button class="small" id="prof">Profil</button></div>
+  </div>`;
+  $$('.it', app).forEach(el => el.onclick = () => viewEntry(el.dataset.id));
+  $('#neu').onclick = () => viewForm();
+  $('#scanq').onclick = scanQuittung;
+  $('#send').onclick = abrechnung;
+  $('#prof').onclick = viewSetup;
+  $('#bk').onclick = () => shareOrDownload(`sicherung_stv_${D.profil.persNr}_${todayISO()}.json`, { typ: 'stv-sicherung', ...D });
+  $('#rs').onchange = async ev => {
+    try { const d = await readJSONFile(ev.target.files[0]); if (d.typ !== 'stv-sicherung') throw new Error('Das ist keine StV-Sicherung.');
+      if (!confirm('Sicherung laden? Die aktuellen Einträge auf diesem Handy werden ersetzt.')) return;
+      D = { profil: d.profil, eintraege: d.eintraege || [], verlauf: d.verlauf || [] }; persist(); toast('Sicherung geladen'); viewHome();
+    } catch (e) { alert(e.message); }
+  };
+  $('#hist').onclick = () => sheet(`<h2>Frühere Abrechnungen</h2>${D.verlauf.length ? D.verlauf.slice().reverse().map((v, i) => `
+    <div class="card"><b>${fmtStamp(v.gesendetAm)}</b><div class="m sub">${v.eintraege.length} Einsätze · ${esc(v.datei)}</div><button class="small" data-i="${D.verlauf.length - 1 - i}">Datei nochmals senden</button></div>`).join('') : '<p class="sub">Noch keine.</p>'}<button class="cl">Schliessen</button>`,
+    (el, close) => { $('.cl', el).onclick = close; $$('[data-i]', el).forEach(b => b.onclick = () => { const v = D.verlauf[+b.dataset.i]; shareOrDownload(v.datei, v.inhalt, 'Abrechnung Stellvertretung'); }); });
+}
+
+/* ---------- Einsatz erfassen / bearbeiten ---------- */
+function viewForm(id) {
+  const old = id ? D.eintraege.find(e => e.code === id) : null;
+  const e = old || { datum: todayISO(), standortNr: (D.eintraege[D.eintraege.length - 1] || {}).standortNr || CONFIG.standorte[0].nr, funktion: '', von: null, bis: null, mittag: true };
+  const timeSel = (id, m) => { const r = m == null ? 12 * 60 : Math.round(m / 10) * 10, hh = Math.min(21, Math.max(6, Math.floor(r / 60))), mm = r % 60;
+    return `<div class="timepick"><select id="${id}h" aria-label="Stunde">${Array.from({ length: 16 }, (_, i) => i + 6).map(h => `<option value="${h}" ${h === hh ? 'selected' : ''}>${pad2(h)}</option>`).join('')}</select><span>:</span>
+    <select id="${id}m" aria-label="Minuten">${[0, 10, 20, 30, 40, 50].map(x => `<option value="${x}" ${x === mm ? 'selected' : ''}>${pad2(x)}</option>`).join('')}</select></div>`; };
+  app.innerHTML = `<button class="back" id="b0">‹ Zurück</button>
+  <header class="top"><h1>${old ? 'Einsatz bearbeiten' : 'Neuer Einsatz'}</h1><span class="role">Stellvertretung</span></header>
+  <div class="card">
+    <label class="l">Datum</label><input type="date" id="dat" value="${e.datum}" max="${todayISO()}">
+    <label class="l">Standort</label><select id="sto">${CONFIG.standorte.map(s => `<option value="${s.nr}" ${s.nr === e.standortNr ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+    <label class="l">Funktion</label><div class="chips" id="fun">${CONFIG.funktionen.map(f => `<span class="chip ${f === e.funktion ? 'on' : ''}" data-v="${f}">${f}</span>`).join('')}</div>
+    <div class="times"><div><label class="l">Von</label>${timeSel('von', e.von)}</div><div><label class="l">Bis</label>${timeSel('bis', e.bis)}</div></div>
+    <label class="l">Mittagessen konsumiert</label><div class="chips" id="mit"><span class="chip ${e.mittag === true ? 'on' : ''}" data-v="1">Ja</span><span class="chip ${e.mittag === false ? 'on' : ''}" data-v="0">Nein</span></div>
+    <div class="err" id="err"></div>
+    <button class="pri" id="ok">${old ? 'Speichern' : 'Zum Visieren'}</button>
+    <button id="back">Abbrechen</button>
+  </div>`;
+  const pick = (box) => $$('.chip', box).forEach(c => c.onclick = () => { $$('.chip', box).forEach(x => x.classList.remove('on')); c.classList.add('on'); });
+  pick($('#fun')); pick($('#mit'));
+  $('#back').onclick = $('#b0').onclick = () => old ? viewEntry(old.code) : viewHome();
+  $('#ok').onclick = () => {
+    const err = m => $('#err').textContent = m;
+    const datum = $('#dat').value, fun = $('#fun .on'), mit = $('#mit .on');
+    const vs = $('#vonh').value === '' ? '' : $('#vonh').value + ':' + $('#vonm').value, bs = $('#bish').value === '' ? '' : $('#bish').value + ':' + $('#bism').value;
+    if (!datum) return err('Bitte Datum wählen.');
+    if (datum > todayISO()) return err('Einsätze in der Zukunft können noch nicht erfasst werden.');
+    if (!fun) return err('Bitte Funktion wählen.');
+    if (!vs || !bs) return err('Bitte bei Von und Bis die Stunde wählen.');
+    let von = hhmmToMin(vs), bis = hhmmToMin(bs);
+    if (von % 5 || bis % 5) { von = Math.round(von / 5) * 5; bis = Math.round(bis / 5) * 5; }
+    if (bis <= von) return err('«Bis» muss nach «Von» liegen.');
+    { const pl = plausi({ von, bis }); if (pl) return err(pl); }
+    if (!mit) return err('Bitte angeben, ob du Mittagessen konsumiert hast.');
+    const n = { persNr: D.profil.persNr, datum, von, bis, funktion: fun.dataset.v, mittag: mit.dataset.v === '1', standortNr: +$('#sto').value };
+    n.code = packEntry(n);
+    const ueber = D.eintraege.find(x => x !== old && x.datum === datum && von < x.bis && bis > x.von);
+    if (ueber) return err('Dieser Einsatz überschneidet sich mit ' + standortName(ueber.standortNr) + ' ' + minToHHMM(ueber.von) + '–' + minToHHMM(ueber.bis) + '.');
+    if (old) Object.assign(old, n); else D.eintraege.push({ ...n, status: 'offen', erstellt: nowLocalISO() });
+    persist(); viewEntry(n.code);
+  };
+}
+
+/* ---------- Einsatz: Visum holen ---------- */
+function viewEntry(id) {
+  const e = D.eintraege.find(x => x.code === id); if (!e) return viewHome();
+  const vis = e.status === 'visiert';
+  app.innerHTML = `<button class="back" id="b0">‹ Zurück</button>
+  <header class="top"><h1>${vis ? 'Einsatz' : 'Visum holen'}</h1><span class="role">Stellvertretung</span></header>
+  <div class="card">
+    <div class="kv"><div>Datum</div><div>${fmtDate(e.datum)}</div><div>Standort</div><div>${esc(standortName(e.standortNr))}</div>
+    <div>Funktion</div><div>${esc(e.funktion)}</div><div>Zeit</div><div>${minToHHMM(e.von)}–${minToHHMM(e.bis)} (${hours(e.von, e.bis)} Std.)</div><div>Mittagessen</div><div>${e.mittag ? 'ja' : 'nein'}</div></div>
+  </div>
+  ${vis ? `<div class="ok-box">✓ Visiert von <b>${esc(e.quitt.name)}</b>${e.quitt.am ? ' am ' + fmtStamp(e.quitt.am) : ''} · Quittung <span class="mono">${esc(e.quitt.tag)}</span></div>`
+  : `<div class="card center">
+      <div class="sub">Zeige diesen QR-Code der Leitung</div>
+      <div class="qrbox">${qrSVG(QR_ENTRY + e.code)}</div>
+      <div class="sub">Notlösung: Code abtippen lassen</div><div class="code">${group4(e.code)}</div>
+      <button class="small" id="cc" style="margin-top:8px">Code kopieren</button>
+    </div>
+    <button class="pri" id="sq">Quittung scannen</button>
+    <button id="tq">Quittung eintippen</button>
+    <div class="btnrow"><button id="ed">Bearbeiten</button><button class="danger" id="del">Löschen</button></div>`}
+  <button id="back">Zum Sammelblatt</button>`;
+  $('#back').onclick = $('#b0').onclick = viewHome;
+  if (vis) return;
+  $('#sq').onclick = scanQuittung;
+  $('#cc').onclick = () => copyText(group4(e.code));
+  $('#ed').onclick = () => viewForm(e.code);
+  $('#del').onclick = () => { if (confirm('Diesen Einsatz löschen?')) { D.eintraege = D.eintraege.filter(x => x !== e); persist(); viewHome(); } };
+  $('#tq').onclick = () => sheet(`<h2>Quittung eintippen</h2>
+    <label class="l">Quittung (4 Zeichen)</label><input id="qt" class="mono" autocapitalize="characters" autocorrect="off" spellcheck="false" style="font-size:24px;letter-spacing:6px;text-align:center">
+    <label class="l">Name der Leitung, die visiert hat</label><input id="qn">
+    <div class="err" id="qe"></div><button class="pri" id="qok">Bestätigen</button><button class="cl">Abbrechen</button>`,
+    (el, close) => {
+      $('.cl', el).onclick = close; codeInputBehaviour($("#qt", el), 4, QR_QUITT);
+      $('#qok', el).onclick = () => {
+        const t = b32norm($('#qt', el).value), n = $('#qn', el).value.trim();
+        if (!/^[0-9A-Z]{4}$/.test(t) || [...t].some(c => !B32.includes(c))) return $('#qe', el).textContent = 'Die Quittung hat 4 Zeichen (Buchstaben und Zahlen).';
+        if (n.length < 2) return $('#qe', el).textContent = 'Bitte den Namen der Leitung eingeben.';
+        e.status = 'visiert'; e.quitt = { tag: t, name: n, am: '', manuell: true }; persist(); close(); toast('Als visiert markiert'); viewEntry(e.code);
+      };
+    });
+}
+
+async function scanQuittung() {
+  const txt = await scanQR('Quittung der Leitung scannen'); if (!txt) return;
+  if (!txt.startsWith(QR_QUITT)) return alert('Das ist keine Quittung. Bitte den QR-Code scannen, den das Betreuungshandy nach dem Visieren zeigt.');
+  const [code, tag, stamp, name] = txt.slice(QR_QUITT.length).split(':');
+  const e = D.eintraege.find(x => x.code === code);
+  if (!e) return alert('Diese Quittung gehört zu keinem Einsatz auf diesem Sammelblatt.');
+  const am = stamp && stamp.length === 12 ? `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(8, 10)}:${stamp.slice(10, 12)}` : '';
+  e.status = 'visiert'; e.quitt = { tag, name: decodeURIComponent(name || ''), am }; persist();
+  toast('✓ Einsatz vom ' + fmtDateShort(e.datum) + ' ist visiert'); viewEntry(e.code);
+}
+
+/* ---------- Abrechnung senden ---------- */
+function abrechnung() {
+  sortE();
+  const E = D.eintraege, offen = E.filter(e => e.status !== 'visiert');
+  const std = E.reduce((s, e) => s + hours(e.von, e.bis), 0);
+  const von = E[0].datum, bis = E[E.length - 1].datum;
+  const datei = `stv_${D.profil.persNr}_${von}_bis_${bis}.json`;
+  const inhalt = { typ: 'stv', version: 1, persNr: D.profil.persNr, name: D.profil.name, erstelltAm: nowLocalISO(), von, bis,
+    eintraege: E.map(e => ({ code: e.code, datum: e.datum, von: minToHHMM(e.von), bis: minToHHMM(e.bis), stunden: hours(e.von, e.bis), funktion: e.funktion, mittag: e.mittag, standortNr: e.standortNr, standort: standortName(e.standortNr), status: e.status, quittung: e.quitt || null, erstellt: e.erstellt })) };
+  sheet(`<h2>Abrechnung senden</h2>
+    <div class="kv"><div>Zeitraum</div><div>${fmtDateShort(von)} – ${fmtDate(bis)}</div><div>Einsätze</div><div>${E.length}</div><div>Stunden</div><div>${Math.round(std * 100) / 100}</div></div>
+    ${offen.length ? `<div class="info" style="margin-top:12px">${offen.length} Einsatz/Einsätze ohne Quittung. Sie werden mitgeschickt; die Administration prüft sie mit den Visa der Leitung.</div>` : ''}
+    <p class="note">Im nächsten Schritt wählst du «Mail» und schickst die Datei an <b>${esc(CONFIG.adminEmail)}</b>.</p>
+    <button class="pri" id="go">Datei erstellen und senden</button>
+    <div id="after" class="hidden"><div class="ok-box" style="margin-top:14px">Hast du die Mail mit der Datei verschickt?</div>
+      <button class="dark" id="nb">Ja, neues Blatt beginnen</button>
+      <a class="btn" href="mailto:${encodeURIComponent(CONFIG.adminEmail)}?subject=${encodeURIComponent('Abrechnung Stellvertretung ' + D.profil.persNr)}&body=${encodeURIComponent('Die Datei ' + datei + ' ist angehängt.')}">Mail-Programm öffnen (Datei selbst anhängen)</a></div>
+    <button class="cl">Abbrechen</button>`,
+    (el, close) => {
+      $('.cl', el).onclick = close;
+      $('#go', el).onclick = async () => { const r = await shareOrDownload(datei, inhalt, 'Abrechnung Stellvertretung ' + D.profil.persNr); if (r !== 'aborted') { $('#after', el).classList.remove('hidden'); if (r === 'downloaded') toast('Datei gespeichert. Bitte per Mail an die Administration senden.', 4000); } };
+      $("#nb", el).onclick = () => {
+        D.verlauf.push({ gesendetAm: nowLocalISO(), datei, eintraege: E.map(e => e.code), inhalt });
+        if (D.verlauf.length > 12) D.verlauf.shift();
+        D.eintraege = []; persist(); close(); toast('Neues Blatt begonnen'); viewHome();
+      };
+    });
+}
+
+viewHome();
+enableBottomBack();

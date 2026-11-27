@@ -1,0 +1,1 @@
+document.getElementById('rs').onclick=()=>{if(confirm('Alle Demo-Daten (Stellvertretung, Leitung, Administration) auf diesem Gerät löschen?')){['stv_data_v1','lei_data_v1','adm_data_v1'].forEach(k=>localStorage.removeItem(k));alert('Zurückgesetzt.');}};
