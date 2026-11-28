@@ -380,3 +380,16 @@ function tabSicherung(el) {
 
 render();
 enableBottomBack();
+
+/* ---------- Nur für die Demo-Bühne (buehne.html): Zugriff von der Präsentationsseite derselben Herkunft ---------- */
+try {
+  if (window.parent !== window && window.parent.STV_BUEHNE) window.STV_DEMO = {
+    rows: () => ROWS.map(r => ({ code: r.e.code, persNr: r.persNr, status: r.status, label: STAT[r.status][1], sel: r.sel, hinweise: r.hinweise.slice(), final: final(r) })),
+    msgs: () => LOADMSG.map(m => m[1]),
+    reset() { ROWS = []; LOADMSG = []; D.visa = {}; D.abgerechnet = {}; D.dateien = []; persist(); TAB = 'pruefung'; render(); },
+    load: files => { TAB = 'pruefung'; return loadFiles(files); },
+    tab(t) { TAB = t; render(); },
+    setStamm(personen) { D.stamm = { personen, datei: 'stammdaten_demo.csv', am: nowLocalISO() }; persist(); },
+    abrechnenAlle() { const am = nowLocalISO(); ROWS.filter(r => r.sel).forEach(r => { const f = final(r); D.abgerechnet[r.e.code] = { am, persNr: r.persNr, datum: r.e.datum, stunden: hours(hhmmToMin(f.von), hhmmToMin(f.bis)) }; }); ROWS = []; LOADMSG = []; persist(); render(); },
+  };
+} catch (e) { }

@@ -10,6 +10,7 @@ Digitale Erfassung und Visierung von Stellvertretungseinsätzen in der Schulerg�
 | `stv.html` | Stellvertretung: Einsätze erfassen, QR-Code zeigen, Quittung scannen, Abrechnung senden | eigenes Handy |
 | `leitung.html` | Leitung: Leitungsmodus mit Stamm-PIN und Ferien-PIN, visieren, Visa exportieren | Betreuungshandy |
 | `admin.html` | Administration: Standort-Schlüssel, Abgleich, Abweichungen, Excel-Export, Archiv | Büro-PC |
+| `buehne.html` | Live-Demo für Präsentationen: alle drei Geräte nebeneinander, geführter Ablauf und Angriffe zum Ausprobieren (nicht für den Betrieb) | Laptop/Beamer |
 | `shared.js` | gemeinsame Bausteine und **Einstellungen** (Standorte, Funktionen, Mail-Adresse) | – |
 | `index.js`, `stv.js`, `leitung.js`, `admin.js` | Programmlogik der vier Seiten | – |
 | `shared.css`, `qrlib.js`, `jsQR.js` | Gestaltung, QR-Code-Erzeugung und QR-Code-Lesen (alles lokal, nichts aus dem Internet) | – |
@@ -71,4 +72,4 @@ Oben in `shared.js` im Block `CONFIG`:
 - Regelmässige Sicherung der Admin-Daten (Tab «Sicherung») festlegen. Sie enthält die Schlüssel.
 - Wichtig auf dem iPhone: Safari und die Home-Bildschirm-App haben getrennte Speicher. Darum zuerst zum Home-Bildschirm hinzufügen, dann einrichten.
 
-QR-Code-Erzeugung: «QRCode for JavaScript», © 2009 Kazuhiko Arase, MIT-Lizenz.
+QR-Code-Erzeugung: «QRCode for JavaScript», © 2009 Kazuhiko Arase, MIT-Lizenz. QR-Code-Lesen: jsQR 1.4.0, Apache-2.0-Lizenz.

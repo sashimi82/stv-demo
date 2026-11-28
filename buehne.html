@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de-CH"><head>
+<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StV-Erfassung · Live-Demo</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="buehne.css?v=9">
+<script src="qrlib.js?v=9"></script><script src="shared.js?v=9"></script><script src="jsQR.js?v=9"></script>
+</head><body>
+<header class="bar">
+  <div class="brand"><b>StV-Erfassung</b><span>Live-Demo</span></div>
+  <div class="modes"><button data-m="ablauf" class="on">Ablauf zeigen</button><button data-m="angriffe">Angriffe ausprobieren</button></div>
+  <div class="ctl"><button id="restart" class="ghost">Neu starten</button></div>
+</header>
+<section class="story" id="story">
+  <div class="stepno" id="stepno"></div>
+  <div class="txt"><h1 id="st-title"></h1><div id="st-text"></div></div>
+  <div class="go"><button id="next" class="pri">Weiter ▶</button><div class="files" id="files"></div></div>
+</section>
+<main class="stage" id="stage">
+  <div class="dev" id="d-stv"><div class="lab">Handy der Stellvertretung</div><div class="phone"><iframe id="f-stv" title="Stellvertretung"></iframe></div></div>
+  <div class="dev" id="d-lei"><div class="lab">Betreuungshandy · Leitung</div><div class="phone"><iframe id="f-lei" title="Leitung"></iframe></div></div>
+  <div class="atk hidden" id="atk"></div>
+  <div class="dev" id="d-adm"><div class="lab">Büro-PC · Administration</div><div class="pc"><iframe id="f-adm" title="Administration"></iframe></div></div>
+</main>
+<div class="toasts" id="toasts"></div>
+<script src="buehne.js?v=9"></script>
+</body></html>
