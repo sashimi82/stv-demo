@@ -39,6 +39,7 @@ function viewSetup(neu) {
     if (p.err) return $('#err').textContent = p.err;
     const nr = p.nr, m = [null, p.nr, p.keyId, p.secret]; if (!CONFIG.standorte.some(s => s.nr === nr)) return $('#err').textContent = 'Unbekannter Standort im Code.';
     if (D.setup && D.setup.standortNr !== nr && D.visa.length && !confirm('Achtung: Dieses Handy war für ' + standortName(D.setup.standortNr) + ' eingerichtet. Wirklich auf ' + standortName(nr) + ' wechseln? Bitte vorher die Visa exportieren.')) return;
+    if (D.setup && (D.setup.keyId !== +m[2] || D.setup.standortNr !== nr)) { D.fruehere = D.fruehere || []; D.fruehere.push({ standortNr: D.setup.standortNr, keyId: D.setup.keyId, secret: D.setup.secret, bis: nowLocalISO() }); }
     D.setup = { standortNr: nr, keyId: +m[2], secret: m[3], eingerichtet: nowLocalISO() };
     if (neu && D.stammHash) { persist(); toast('Neuer Schlüssel gespeichert'); return viewHome(); }
     viewNewPin();
@@ -182,7 +183,10 @@ function viewVisum(code) {
   if ($('#q')) $('#q').onclick = () => viewQuitt(v);
   if ($('#st')) $('#st').onclick = async () => {
     if (!confirm('Visum wirklich stornieren? Die Administration sieht den Einsatz dann als «Visum storniert».')) return;
-    v.storniert = true; v.stornoAm = nowLocalISO(); v.sig = await visumSig(D.setup.secret, v); persist(); toast('Visum storniert'); viewHome();
+    // Ein Storno wird mit dem Schlüssel unterschrieben, mit dem das Visum erteilt wurde (auch nach einem Schlüsselwechsel).
+    const k = v.keyId === D.setup.keyId && v.standortNr === D.setup.standortNr ? D.setup : (D.fruehere || []).find(x => x.keyId === v.keyId && x.standortNr === v.standortNr);
+    if (!k) return alert('Dieses Visum wurde mit einem früheren Schlüssel erteilt, der auf diesem Handy nicht mehr vorhanden ist. Bitte das Storno der Administration melden.');
+    v.storniert = true; v.stornoAm = nowLocalISO(); v.sig = await visumSig(k.secret, v); persist(); toast('Visum storniert'); viewHome();
   };
 }
 

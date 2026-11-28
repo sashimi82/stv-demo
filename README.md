@@ -59,6 +59,7 @@ Oben in `shared.js` im Block `CONFIG`:
 - Eine Sicherheitsregel (Content-Security-Policy) erlaubt nur die eigenen Skripte und verbietet jede Verbindung ins Internet.
 - Visa dürfen in beliebiger Reihenfolge und nachträglich eingeholt werden (nur Hinweis). Zeitstempel, die auf eine verstellte Uhr hindeuten, markiert die Administration und wählt diese Einsätze nicht automatisch zur Abrechnung aus.
 - Stammdaten (Personalnummer, Name, Funktionen) werden im Admin im Hintergrund eingelesen und nicht angezeigt. Die Prüfung meldet unbekannte Personalnummern, falsche Namen und nicht vorgesehene Funktionen.
+- Schlüsselwechsel: Visa, die mit einem früheren Schlüssel erteilt wurden, bleiben gültig. Das Betreuungshandy behält frühere Schlüssel, um alte Visa stornieren zu können. Fehlt eine Leitungs-Datei (z. B. Handy verloren), belegt die Quittung auf dem Handy der Stellvertretung das Visum; die Administration kann den Einsatz damit anerkennen.
 - Bekannte Restrisiken: Wer die Handy-Uhr verstellt, kann Zeitstempel beeinflussen (wird oft erkannt, nicht immer). Wer technisch versiert ist und das Betreuungshandy samt PIN in der Hand hat, kann den Standort-Schlüssel auslesen.
 
 ## Vor dem echten Einsatz (nicht Teil der Demo)

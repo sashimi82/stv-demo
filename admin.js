@@ -118,7 +118,11 @@ async function loadFiles(files) {
       stv++; const name = txt(d.name) || '(ohne Namen)';
       for (const raw of d.eintraege.slice(0, 2000)) {
         const e = cleanEintrag(raw); if (!e) { abgelehnt++; continue; }
-        if (!ROWS.some(x => x.e.code === e.code)) ROWS.push(makeRow({ persNr: d.persNr, name }, e, fname));
+        if (ROWS.some(x => x.e.code === e.code)) continue;
+        // Quittung mit allen (auch gesperrten) Schlüsseln des Standorts prüfen: belegt das Visum auch ohne Leitungs-Datei
+        e.qKey = 0; e.qPruefbar = !!(D.keys[e.standortNr] || []).length;
+        if (e.quittung) for (const k of D.keys[e.standortNr] || []) if (await quittTag(k.secret, e.code) === e.quittung.tag) { e.qKey = k.keyId; break; }
+        ROWS.push(makeRow({ persNr: d.persNr, name }, e, fname));
       }
       D.dateien.push({ name: fname, typ: 'stv', am: jetzt, n: d.eintraege.length });
     } else LOADMSG.push(['b-err', fname + ': unbekannter Dateityp']);
@@ -167,7 +171,9 @@ function evaluate(r) {
     r.hinweise.push(r.diffs.map(d => d[0]).join(', ') + ' unterschiedlich');
     return;
   }
-  r.status = 'none'; r.sel = false; r.hinweise.push('Leitungs-Datei von ' + standortName(e.standortNr) + ' fehlt oder Einsatz nicht visiert');
+  r.status = 'none'; r.sel = false;
+  if (e.qKey) r.hinweise.push('Leitungs-Datei fehlt, aber die Quittung ist echt (Schlüssel Nr. ' + e.qKey + '): Visum belegt');
+  else { r.hinweise.push('Leitungs-Datei von ' + standortName(e.standortNr) + ' fehlt oder Einsatz nicht visiert'); if (e.quittung && e.qPruefbar) r.hinweise.push('Quittung auf dem Handy ist nicht gültig'); }
 }
 /** Prüfungen über mehrere Einsätze: Überschneidungen und Tagestotal pro Person (auch über Standorte hinweg) */
 function crossCheck() {
@@ -255,6 +261,7 @@ function details(r) {
   </table><p class="note">Quelle: ${esc(r.quelle)}${v ? ' · Visum aus ' + esc(v.quelle) : ''}</p></div>
   ${r.hinweise.length ? `<div class="info">${esc(r.hinweise.join(' · '))}</div>` : ''}
   ${r.status === 'diff' ? '<button class="pri" id="uv">Werte aus dem Visum übernehmen</button>' : ''}
+  ${r.status === 'none' && e.qKey ? '<button class="pri" id="qa">Anhand der echten Quittung anerkennen</button>' : ''}
   ${['none', 'diff', 'storno'].includes(r.status) ? '<button id="ma">Trotzdem anerkennen (Angaben der Stellvertretung)</button>' : ''}
   ${r.status === 'manuell' ? '<button id="rv">Anerkennung zurücknehmen</button>' : ''}
   <a class="btn" href="mailto:?subject=${encodeURIComponent('Rückfrage Stellvertretungseinsatz ' + fmtDate(e.datum))}&body=${encodeURIComponent(`Guten Tag\n\nBeim Einsatz vom ${fmtDate(e.datum)} in ${standortName(e.standortNr)} (${r.name}, ${r.persNr}) haben wir eine Unklarheit:\n${r.hinweise.join('\n')}\n\nAngaben Stellvertretung: ${e.von}–${e.bis}, ${e.funktion}, Mittagessen ${e.mittag ? 'ja' : 'nein'}${v ? `\nVisum Leitung: ${vz.zeit}, ${vz.funktion}, Mittagessen ${vz.mittag}` : ''}\n\nBitte um kurze Rückmeldung.\n\nFreundliche Grüsse\nAdministration Stellvertretung`)}">Rückfrage per Mail</a>
@@ -263,6 +270,7 @@ function details(r) {
       $('.cl', el).onclick = close;
       if ($('#uv', el)) $('#uv', el).onclick = () => { r.manuell = { v, grund: 'Visum übernommen' }; evaluate(r); r.hinweise = ['Werte aus Visum übernommen']; close(); render(); };
       if ($('#ma', el)) $('#ma', el).onclick = () => { const g = txt(prompt('Begründung (wird in der Excel-Datei vermerkt):') || '', 200); if (!g) return; r.manuell = { v: null, grund: g }; evaluate(r); r.hinweise = ['manuell: ' + g]; close(); render(); };
+      if ($('#qa', el)) $('#qa', el).onclick = () => { const c = unpackEntry(e.code); r.manuell = { v: { ...c, visiertVon: (e.quittung.name || '?') + ' (laut Quittung)', visiertAm: '', pinTyp: '', tag: e.quittung.tag }, grund: 'Quittung echt, Leitungs-Datei fehlt' }; evalAll(); r.hinweise = ['anerkannt anhand der Quittung (Werte aus dem Code)']; close(); render(); };
       if ($('#rv', el)) $('#rv', el).onclick = () => { r.manuell = null; evalAll(); close(); render(); };
     });
 }
@@ -270,7 +278,7 @@ function csv(name, rows, alle) {
   const head = ['Personalnummer', 'Name', 'Datum', 'Standort', 'Funktion', 'Von', 'Bis', 'Stunden', 'Mittagessen', 'Visiert von', 'Visiert am', 'Visum-Art', 'Status', 'Hinweise'];
   const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
   const lines = rows.map(r => { const f = final(r), v = f.v; const [y, m, d] = r.e.datum.split('-');
-    return [r.persNr, r.name, `${d}.${m}.${y}`, standortName(r.e.standortNr), f.funktion, f.von, f.bis, hours(hhmmToMin(f.von), hhmmToMin(f.bis)), f.mittag ? 'ja' : 'nein', v ? v.visiertVon : '', v ? fmtStamp(v.visiertAm) : '', v ? (v.pinTyp === 'ferien' ? 'Ferien-PIN' : 'Stamm-PIN') : '', STAT[r.status][1].replace(/^\S+ /, ''), (r.manuell ? r.manuell.grund + ' · ' : '') + r.hinweise.join(' · ')].map(q).join(';'); });
+    return [r.persNr, r.name, `${d}.${m}.${y}`, standortName(r.e.standortNr), f.funktion, f.von, f.bis, hours(hhmmToMin(f.von), hhmmToMin(f.bis)), f.mittag ? 'ja' : 'nein', v ? v.visiertVon : '', v ? fmtStamp(v.visiertAm) : '', v ? (v.pinTyp === 'ferien' ? 'Ferien-PIN' : v.pinTyp === 'stamm' ? 'Stamm-PIN' : 'Quittung') : '', STAT[r.status][1].replace(/^\S+ /, ''), (r.manuell ? r.manuell.grund + ' · ' : '') + r.hinweise.join(' · ')].map(q).join(';'); });
   const blob = new Blob(['﻿' + [head.map(q).join(';'), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
 }
