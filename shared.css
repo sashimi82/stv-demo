@@ -83,3 +83,5 @@ input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and
 .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}.scrollx table{min-width:640px}
 @media(max-width:380px){.times{gap:0 10px}.timepick select{width:56px;padding:10px 2px}}
 @media(max-width:340px){.timepick{gap:2px}.timepick select{width:50px;font-size:16px}}
+
+.bd.wrap{max-width:100%;white-space:normal}

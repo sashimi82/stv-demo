@@ -58,6 +58,7 @@ Oben in `shared.js` im Block `CONFIG`:
 - Die Administration liest nur Dateien im erwarteten Aufbau ein. Unzulässige Einträge werden abgewiesen. Ein gültiges Visum kann nicht durch eine gefälschte Kopie verdrängt werden.
 - Eine Sicherheitsregel (Content-Security-Policy) erlaubt nur die eigenen Skripte und verbietet jede Verbindung ins Internet.
 - Visa dürfen in beliebiger Reihenfolge und nachträglich eingeholt werden (nur Hinweis). Zeitstempel, die auf eine verstellte Uhr hindeuten, markiert die Administration und wählt diese Einsätze nicht automatisch zur Abrechnung aus.
+- Stammdaten (Personalnummer, Name, Funktionen) werden im Admin im Hintergrund eingelesen und nicht angezeigt. Die Prüfung meldet unbekannte Personalnummern, falsche Namen und nicht vorgesehene Funktionen.
 - Bekannte Restrisiken: Wer die Handy-Uhr verstellt, kann Zeitstempel beeinflussen (wird oft erkannt, nicht immer). Wer technisch versiert ist und das Betreuungshandy samt PIN in der Hand hat, kann den Standort-Schlüssel auslesen.
 
 ## Vor dem echten Einsatz (nicht Teil der Demo)

@@ -23,7 +23,7 @@ const CONFIG = {
   maxStundenEinsatz: 12,                    //               höchstens so viele Stunden pro Einsatz
   maxStundenTag: 12,                        // Admin: Hinweis, wenn eine Person an einem Tag mehr arbeitet
   // QR-Lesen auf iPhones: lokale Kopie (jsQR.js im selben Ordner), kein Nachladen aus dem Internet
-  jsqrUrls: ['./jsQR.js?v=7'],
+  jsqrUrls: ['./jsQR.js?v=8'],
 };
 
 /* ---------- kleine Helfer ---------- */

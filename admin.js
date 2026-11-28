@@ -1,5 +1,6 @@
 const KEY = 'adm_data_v1';
 let D = store(KEY, { keys: {}, visa: {}, abgerechnet: {}, dateien: [] });
+D.stamm = D.stamm || { personen: {}, datei: '', am: '' };
 const persist = () => save(KEY, D);
 askPersist();
 const app = $('#app');
@@ -10,10 +11,10 @@ const STAT = { ok: ['b-ok', '✓ stimmt'], diff: ['b-warn', '⚠ Abweichung'], n
 
 function render() {
   app.innerHTML = `<a class="back" href="index.html">‹ Startseite</a><header class="top"><div><h1>Prüfung Stellvertretung</h1><div class="sub">Administration · alle Daten bleiben in diesem Browser</div></div><span class="role">Administration</span></header>
-  <div class="tabs">${[['pruefung', 'Prüfung'], ['archiv', 'Visa-Archiv'], ['standorte', 'Standorte und Schlüssel'], ['sicherung', 'Sicherung']].map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-t="${k}">${t}</button>`).join('')}</div>
+  <div class="tabs">${[['pruefung', 'Prüfung'], ['archiv', 'Visa-Archiv'], ['stamm', 'Stammdaten'], ['standorte', 'Standorte und Schlüssel'], ['sicherung', 'Sicherung']].map(([k, t]) => `<button class="${TAB === k ? 'on' : ''}" data-t="${k}">${t}</button>`).join('')}</div>
   <div id="tab"></div>`;
   $$('.tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.t; render(); });
-  ({ pruefung: tabPruefung, archiv: tabArchiv, standorte: tabStandorte, sicherung: tabSicherung })[TAB]($('#tab'));
+  ({ pruefung: tabPruefung, archiv: tabArchiv, stamm: tabStamm, standorte: tabStandorte, sicherung: tabSicherung })[TAB]($('#tab'));
 }
 
 /* ---------- Standorte und Schlüssel ---------- */
@@ -180,7 +181,19 @@ function crossCheck() {
     if (tot > CONFIG.maxStundenTag * 60) list.forEach(r => { r.hinweise.push('total ' + hours(0, tot) + ' Std. an diesem Tag'); r.sel = false; });
   });
 }
-function evalAll() { ROWS.forEach(evaluate); crossCheck(); }
+const normName = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
+function stammCheck(r) {
+  r.stamm = null;
+  if (!Object.keys(D.stamm.personen).length || ['dup', 'manuell'].includes(r.status)) return;
+  const p = D.stamm.personen[r.persNr];
+  if (!p) { r.hinweise.push('Personalnummer nicht in den Stammdaten'); r.sel = false; return; }
+  r.stamm = p;
+  const a = normName(p.name), b = normName(r.name);
+  if (!a.length || !b.length || !a.every(w => b.includes(w)) && !b.every(w => a.includes(w))) { r.hinweise.push('Name passt nicht zur Personalnummer (Stammdaten: ' + p.name + ')'); r.sel = false; }
+  const f = final(r).funktion;
+  if (p.funktionen.length && !p.funktionen.includes(f)) { r.hinweise.push('Funktion ' + f + ' laut Stammdaten nicht vorgesehen (' + p.funktionen.join(', ') + ')'); r.sel = false; }
+}
+function evalAll() { ROWS.forEach(evaluate); crossCheck(); ROWS.forEach(stammCheck); }
 const final = r => { // Werte, die abgerechnet werden
   const fromV = v => ({ von: minToHHMM(v.von), bis: minToHHMM(v.bis), funktion: v.funktion, mittag: v.mittag, v });
   if (r.status === 'manuell' && r.manuell.v) return fromV(r.manuell.v);
@@ -196,13 +209,13 @@ function tabPruefung(el) {
   const cnt = s => ROWS.filter(r => r.status === s).length;
   el.innerHTML = `
   <label class="drop" id="drop">Dateien hierher ziehen oder <u>auswählen</u><br><span style="font-size:14px">StV-Dateien (stv_…json) und Leitungs-Dateien (visa_…json), beliebig gemischt</span><input type="file" id="fi" multiple accept=".json,application/json" hidden></label>
-  ${LOADMSG.map(([c, m]) => `<div style="margin-top:10px"><span class="bd ${c}">${esc(m)}</span></div>`).join('')}
+  ${LOADMSG.map(([c, m]) => `<div style="margin-top:10px"><span class="bd wrap ${c}">${esc(m)}</span></div>`).join('')}
   ${ROWS.length ? `<div class="card" style="margin-top:14px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><h2>Ergebnis</h2>
     <div class="sub">${cnt('ok') + cnt('manuell')} in Ordnung · ${cnt('diff')} Abweichungen · ${cnt('none') + cnt('manip') + cnt('storno')} ohne gültiges Visum · ${cnt('dup')} schon abgerechnet</div></div>
     <div class="scrollx"><table><tr><th></th><th>Person</th><th>Datum</th><th>Standort</th><th>Funktion</th><th>Zeit</th><th>Std.</th><th>Mittag</th><th>Status</th><th>Hinweise</th><th></th></tr>
     ${ROWS.map((r, i) => { const f = final(r); return `<tr class="${r.sel ? '' : ''}"><td><input type="checkbox" data-s="${i}" ${r.sel ? 'checked' : ''} ${['ok', 'manuell'].includes(r.status) ? '' : 'disabled'} style="width:auto"></td>
-      <td>${esc(r.name)}<div class="sub">${esc(r.persNr)}</div></td><td>${esc(fmtDateShort(r.e.datum) + r.e.datum.slice(0, 4))}</td><td>${esc(standortName(r.e.standortNr))}</td><td>${esc(f.funktion)}</td>
+      <td>${esc(r.stamm ? r.stamm.name : r.name)}<div class="sub">${esc(r.persNr)}${r.stamm && normName(r.stamm.name).join(' ') !== normName(r.name).join(' ') ? ' · in Datei: ' + esc(r.name) : ''}</div></td><td>${esc(fmtDateShort(r.e.datum) + r.e.datum.slice(0, 4))}</td><td>${esc(standortName(r.e.standortNr))}</td><td>${esc(f.funktion)}</td>
       <td style="white-space:nowrap">${esc(f.von)}–${esc(f.bis)}</td><td>${hours(hhmmToMin(f.von), hhmmToMin(f.bis))}</td><td>${f.mittag ? 'ja' : 'nein'}</td>
       <td><span class="bd ${STAT[r.status][0]}">${STAT[r.status][1]}</span></td><td class="sub">${esc(r.hinweise.join(' · '))}</td>
       <td><button class="small" data-d="${i}">Details</button></td></tr>`; }).join('')}
@@ -262,6 +275,60 @@ function csv(name, rows, alle) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 500);
 }
 
+/* ---------- Stammdaten ---------- */
+function cleanStamm(s) {
+  const out = { personen: {}, datei: '', am: '' };
+  if (!s || typeof s !== 'object') return out;
+  for (const [nr, p] of Object.entries(s.personen || {})) if (RX.pnr.test(nr) && p && txt(p.name)) out.personen[nr] = { name: txt(p.name), funktionen: (Array.isArray(p.funktionen) ? p.funktionen : []).filter(f => CONFIG.funktionen.includes(f)) };
+  out.datei = txt(s.datei, 120) || ''; out.am = RX.stamp.test(s.am) ? s.am : '';
+  return out;
+}
+/** Liest eine Excel-CSV-Liste: Spalten Personalnummer, Name (oder Vorname + Nachname), Funktionen */
+function parseStamm(text) {
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) throw new Error('Die Datei ist leer.');
+  const sep = [';', '\t', ','].sort((x, y) => lines[0].split(y).length - lines[0].split(x).length)[0];
+  const cells = l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+  const head = cells(lines[0]).map(h => h.toLowerCase().replace(/[^a-zäöü]/g, ''));
+  const col = (...n) => head.findIndex(h => n.some(x => h.startsWith(x)));
+  const iNr = col('personalnummer', 'persnr', 'personalnr', 'pnr'), iName = col('name'), iVor = col('vorname'), iNach = col('nachname'), iFun = col('funktion');
+  if (iNr < 0 || (iName < 0 && iNach < 0)) throw new Error('Spalten «Personalnummer» und «Name» (oder «Vorname» und «Nachname») nicht gefunden.');
+  const personen = {}, fehler = [], fremd = new Set();
+  lines.slice(1).forEach((l, i) => {
+    const c = cells(l), nr = (c[iNr] || '').replace(/\D/g, '').padStart(6, '0');
+    const name = txt(iNach >= 0 ? [c[iVor] || '', c[iNach] || ''].join(' ') : c[iName]);
+    if (!RX.pnr.test(nr) || !name) return fehler.push(i + 2);
+    const fun = iFun >= 0 ? (c[iFun] || '').toUpperCase().split(/[,/+ ]+/).filter(Boolean).map(f => f === 'FAB' ? 'FABE' : f === 'ASSISTENZ' ? 'Assistenz' : f) : [];
+    fun.filter(f => !CONFIG.funktionen.includes(f)).forEach(f => fremd.add(f));
+    personen[nr] = { name, funktionen: fun.filter(f => CONFIG.funktionen.includes(f)) };
+  });
+  return { personen, fehler, fremd: [...fremd] };
+}
+function tabStamm(el) {
+  const n = Object.keys(D.stamm.personen).length;
+  el.innerHTML = `<div class="card"><h2>Stammdaten</h2>
+  <p class="sub" style="margin-bottom:12px">Liste aus der Personaladministration. Sie wird nicht angezeigt, sondern nur im Hintergrund für die Prüfung verwendet: Passen Name und Funktion zur Personalnummer?</p>
+  ${n ? `<div class="ok-box">Stammdaten aktiv: ${n} Personen · Datei ${esc(D.stamm.datei)} · eingelesen ${fmtStamp(D.stamm.am)}</div>` : '<div class="info">Noch keine Stammdaten. Ohne Stammdaten werden Name und Funktion nicht geprüft.</div>'}
+  <div class="btngroup"><label class="btn small pri">${n ? 'Neue Liste einlesen' : 'Liste einlesen'} (Excel als CSV)<input type="file" id="sf" accept=".csv,.txt,text/csv" hidden></label>
+  <button class="small" id="sv">Vorlage herunterladen</button>${n ? '<button class="small danger" id="sd">Stammdaten löschen</button>' : ''}</div>
+  <p class="note">Spalten: <b>Personalnummer</b>; <b>Name</b> (oder <b>Vorname</b> und <b>Nachname</b>); <b>Funktionen</b> (z. B. «GL, FABE»). Eine neue Liste ersetzt die bisherige.</p>
+  <div id="sm"></div></div>`;
+  $('#sv', el).onclick = () => { const b = new Blob(['﻿Personalnummer;Name;Funktionen\r\n123456;Sara Keller;GL, FABE\r\n234567;Luca Meier;Assistenz\r\n'], { type: 'text/csv;charset=utf-8' }); const x = document.createElement('a'); x.href = URL.createObjectURL(b); x.download = 'stammdaten_vorlage.csv'; document.body.appendChild(x); x.click(); setTimeout(() => x.remove(), 500); };
+  $('#sf', el).onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    try {
+      if (f.size > 2e6) throw new Error('Die Datei ist zu gross.');
+      const r = parseStamm(await f.text()), k = Object.keys(r.personen).length;
+      if (!k) throw new Error('Keine gültige Zeile gefunden.');
+      if (!confirm(k + ' Personen einlesen? Die bisherigen Stammdaten werden ersetzt.')) return;
+      D.stamm = { personen: r.personen, datei: txt(f.name, 120) || '', am: nowLocalISO() }; persist(); evalAll(); render();
+      const m = [k + ' Personen eingelesen.']; if (r.fehler.length) m.push('Übersprungen (Zeile ' + r.fehler.slice(0, 10).join(', ') + (r.fehler.length > 10 ? ' …' : '') + '): Personalnummer oder Name fehlt.'); if (r.fremd.length) m.push('Unbekannte Funktionen ignoriert: ' + r.fremd.join(', ') + '.');
+      $('#sm').innerHTML = m.map((x, i) => `<div style="margin-top:8px"><span class="bd wrap ${i ? 'b-warn' : 'b-ok'}">${esc(x)}</span></div>`).join('');
+    } catch (e) { alert(e.message); }
+  };
+  if ($('#sd', el)) $('#sd', el).onclick = () => { if (confirm('Stammdaten löschen?')) { D.stamm = { personen: {}, datei: '', am: '' }; persist(); evalAll(); render(); } };
+}
+
 /* ---------- Visa-Archiv ---------- */
 function tabArchiv(el) {
   const all = Object.values(D.visa).sort((a, b) => b.visiertAm.localeCompare(a.visiertAm));
@@ -289,7 +356,7 @@ function cleanBackup(d) {
   const abgerechnet = {};
   for (const [c, x] of Object.entries(d.abgerechnet || {})) if (/^[0-9A-Z]{16}$/.test(c) && x) abgerechnet[c] = { am: RX.stamp.test(x.am) ? x.am : '', persNr: RX.pnr.test(x.persNr) ? x.persNr : '', datum: RX.date.test(x.datum) ? x.datum : '', stunden: typeof x.stunden === 'number' ? x.stunden : 0 };
   const dateien = (Array.isArray(d.dateien) ? d.dateien : []).map(f => ({ name: txt(f.name, 120) || '', typ: f.typ === 'stv' ? 'stv' : 'leitung', am: RX.stamp.test(f.am) ? f.am : '', n: Number.isInteger(f.n) ? f.n : 0 }));
-  return { keys, visa, abgerechnet, dateien };
+  return { keys, visa, abgerechnet, dateien, stamm: cleanStamm(d.stamm) };
 }
 function tabSicherung(el) {
   el.innerHTML = `<div class="card"><h2>Sicherung</h2>
@@ -300,7 +367,7 @@ function tabSicherung(el) {
   <button class="danger" id="rs">Alles löschen (nur für Tests)</button></div>`;
   $('#sv', el).onclick = () => shareOrDownload('admin_sicherung_' + todayISO() + '.json', { typ: 'admin-sicherung', version: 1, gespeichertAm: nowLocalISO(), ...D });
   $('#ld', el).onchange = async ev => { try { const d = await readJSONFile(ev.target.files[0]); if (d.typ !== 'admin-sicherung') throw new Error('Das ist keine Admin-Sicherung.'); if (!confirm('Sicherung laden? Der aktuelle Stand in diesem Browser wird ersetzt.')) return; D = cleanBackup(d); persist(); evalAll(); toast('Sicherung geladen'); render(); } catch (e) { alert(e.message); } };
-  $('#rs', el).onclick = () => { if (confirm('Wirklich alles löschen? Schlüssel, Archiv und Abrechnungen gehen verloren.') && confirm('Ganz sicher?')) { D = { keys: {}, visa: {}, abgerechnet: {}, dateien: [] }; ROWS = []; LOADMSG = []; persist(); render(); } };
+  $('#rs', el).onclick = () => { if (confirm('Wirklich alles löschen? Schlüssel, Archiv und Abrechnungen gehen verloren.') && confirm('Ganz sicher?')) { D = { keys: {}, visa: {}, abgerechnet: {}, dateien: [], stamm: { personen: {}, datei: '', am: '' } }; ROWS = []; LOADMSG = []; persist(); render(); } };
 }
 
 render();
